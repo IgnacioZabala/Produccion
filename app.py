@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
 st.title("Generador de Reportes de Producción y Calidad")
 
-# ID de Google Drive
+# ID de Google Drive (ya integrado)
 ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
@@ -70,13 +70,13 @@ try:
         axis=1
     )
 
-    # NUEVO: Cálculo del % de PNC por fila
+    # Cálculo del % de PNC por fila
     df['% PNC'] = df.apply(
         lambda x: f"{(x['PNC'] / x['Litros Procesados'] * 100):.3f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,000%", 
         axis=1
     )
 
-    # FILTROS LATERALES
+    # FILTROS LATERALES (Solo Año, Mes y Grupo)
     st.sidebar.header("Filtros de Búsqueda")
     
     df['Año'] = df['Fecha'].dt.year
@@ -108,7 +108,7 @@ try:
     ratio_promedio = (total_prod / total_litros * 100) if total_litros > 0 else 0
     pnc_promedio = (total_pnc / total_litros * 100) if total_litros > 0 else 0
 
-    # Mostrar métricas rápidas (5 columnas ahora)
+    # Mostrar métricas rápidas (5 columnas)
     st.subheader("📊 Resumen de Producción y Calidad")
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Litros Procesados", fmt3(total_litros))
@@ -126,18 +126,20 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF en A4 vertical con 8 columnas optimizadas
+    # Función para generar el PDF en A4 vertical optimizado para 8 columnas
     def generar_pdf_bytes(dataframe_original):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", 'B', 14)
         pdf.cell(190, 10, txt="Reporte de Producción y Calidad", ln=True, align='C')
-        pdf.ln(5)
+        pdf.ln(4)
         
-        pdf.set_font("Arial", 'B', 6.5)
-        # 8 Columnas distribuidas en 190 mm de ancho útil:
-        # [Fecha, Lote, Producto, Litros, Terminado, PNC, % PNC, Ratio]
-        anchos = [18, 24, 36, 26, 26, 18, 18, 24]
+        # Letra más chica (6pt) para que los títulos entren sin encimarse
+        pdf.set_font("Arial", 'B', 6)
+        
+        # Anchos exactos que suman 190 mm (ancho útil de hoja A4 vertical)
+        # Orden: Fecha, Lote, Producto, Litros Procesados, Producto Terminado, PNC, % PNC, Ratio de Conversión (%)
+        anchos = [18, 24, 38, 24, 24, 16, 16, 30]
         columnas = dataframe_original.columns.tolist()
         
         for i in range(len(columnas)):
