@@ -4,7 +4,7 @@ from fpdf import FPDF
 import os
 
 st.set_page_config(page_title="Reporte de Producción y Calidad", page_icon="🏭", layout="wide")
-st.title("Reporte de producción y recepción de leche")
+st.title("Reporte de producción")
 
 # ==========================================
 # CONFIGURACIÓN DE IDs DE GOOGLE DRIVE
@@ -123,8 +123,6 @@ try:
     # Crear DataFrame para Gerencia (Suma Producto Terminado + PNC)
     df_gerencia = df_filtrado.copy()
     if len(df_gerencia) > 0:
-        # Recuperamos valores numéricos originales antes del formateo a string
-        # Reconstruimos sobre los datos base filtrados
         df_gerencia_raw = df_prod.copy()
         if filtro_anio != "Todos":
             df_gerencia_raw = df_gerencia_raw[df_gerencia_raw['Año'] == filtro_anio]
@@ -188,7 +186,7 @@ try:
 
     titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
 
-    # PESTAÑAS EN LA WEB PARA INTERNO Y GERENCIA
+    # PESTAÑAS EN LA WEB
     tab_interno, tab_gerencia = st.tabs(["🔒 Vista Interna", "📊 Vista Gerencia"])
 
     with tab_interno:
@@ -215,9 +213,9 @@ try:
         g1, g2, g3, g4, g5 = st.columns(5)
         g1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
         g2.metric("Litros Procesados", fmt2(total_litros_proc))
-        g3.metric("Prod. Term. (PT + PNC)", fmt2(total_prod_gerencia))
-        g4.metric("Ratio Ponderado Gerencia", f"{ratio_ponderado_gerencia:.2f}%".replace(".", ","))
-        g5.metric("Rend. Gerencia vs Ingreso", f"{rendimiento_ingreso_gerencia:.2f}%".replace(".", ","))
+        g3.metric("Total Prod. Terminado", fmt2(total_prod_gerencia))
+        g4.metric("Ratio PT / Litros procesados", f"{ratio_ponderado_gerencia:.2f}%".replace(".", ","))
+        g5.metric("Ratio PT / Litros ingresados", f"{rendimiento_ingreso_gerencia:.2f}%".replace(".", ","))
 
         st.subheader("Detalle de Lotes (Gerencia)")
         if len(df_gerencia) > 0:
@@ -235,9 +233,10 @@ try:
         pdf.cell(190, 7, txt=titulo_dinamico + " (Interno)", ln=True, align='C')
         pdf.ln(3)
         
-        pdf.set_font("Arial", 'B', 9)
+        # Resumen con fuente 9pt (más grande que el detalle)
+        pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Resumen Interno", ln=True, align='L')
-        pdf.set_font("Arial", '', 8)
+        pdf.set_font("Arial", '', 9)
         
         tot_lit = dataframe_original['Litros Procesados'].sum()
         tot_pro = dataframe_original['Producto Terminado'].sum()
@@ -253,18 +252,19 @@ try:
         pdf.cell(95, 5, txt=f"Total PNC: {fmt2(tot_pn)} (% PNC Global: {pnc_glob:.2f}%)".replace(".", ","), ln=1)
         pdf.ln(4)
         
-        pdf.set_font("Arial", 'B', 9)
+        pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
         pdf.ln(2)
         
-        pdf.set_font("Arial", 'B', 6)
+        pdf.set_font("Arial", 'B', 6.5)
         anchos = [18, 24, 40, 24, 24, 14, 16, 30]
         columnas = dataframe_original.columns.tolist()
         for i in range(len(columnas)):
             pdf.cell(anchos[i], 7, columnas[i], border=1, align='C')
         pdf.ln()
         
-        pdf.set_font("Arial", '', 6.5)
+        # Detalle con fuente 7pt
+        pdf.set_font("Arial", '', 7)
         for index, row in dataframe_original.iterrows():
             pdf.cell(anchos[0], 6, row['Fecha'].strftime('%d/%m/%Y'), border=1, align='C')
             pdf.cell(anchos[1], 6, str(row['Lote']), border=1, align='C')
@@ -283,35 +283,36 @@ try:
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", 'B', 13)
-        pdf.cell(190, 7, txt=titulo_dinamico + " (Gerencia)", ln=True, align='C')
+        pdf.cell(190, 7, txt=titulo_dinamico, ln=True, align='C')
         pdf.ln(3)
         
-        pdf.set_font("Arial", 'B', 9)
-        pdf.cell(190, 5, txt="Resumen Gerencial", ln=True, align='L')
-        pdf.set_font("Arial", '', 8)
+        # Resumen gerencial con fuente 9pt (más grande que el detalle)
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(190, 5, txt="Resumen", ln=True, align='L')
+        pdf.set_font("Arial", '', 9)
         
         tot_lit = dataframe_gerencia['Litros Procesados'].sum()
         tot_pro_ger = dataframe_gerencia['Producto Terminado'].sum()
         
         pdf.cell(95, 5, txt=f"Total Litros Ingresados: {fmt2(lit_ingresados)}", ln=0)
-        pdf.cell(95, 5, txt=f"Ratio Ponderado Gerencia: {ratio_pond_gerenc:.2f}%".replace(".", ","), ln=1)
+        pdf.cell(95, 5, txt=f"Ratio PT / Litros procesados: {ratio_pond_gerenc:.2f}%".replace(".", ","), ln=1)
         pdf.cell(95, 5, txt=f"Total Litros Procesados: {fmt2(tot_lit)}", ln=0)
-        pdf.cell(95, 5, txt=f"Rendimiento Gerencia vs Ingreso: {rend_gerencia:.2f}%".replace(".", ","), ln=1)
-        pdf.cell(95, 5, txt=f"Total Prod. Terminado (PT + PNC): {fmt2(tot_pro_ger)}", ln=1)
+        pdf.cell(95, 5, txt=f"Ratio PT / Litros ingresados: {rend_gerencia:.2f}%".replace(".", ","), ln=1)
+        pdf.cell(95, 5, txt=f"Total Producto Terminado: {fmt2(tot_pro_ger)}", ln=1)
         pdf.ln(4)
         
-        pdf.set_font("Arial", 'B', 9)
+        pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
         pdf.ln(2)
         
         pdf.set_font("Arial", 'B', 7)
-        # 6 columnas para gerencia: Fecha, Lote, Producto, Litros Proc., Prod. Terminado (PT+PNC), Ratio (%)
         anchos = [20, 28, 42, 32, 38, 30]
         columnas = dataframe_gerencia.columns.tolist()
         for i in range(len(columnas)):
             pdf.cell(anchos[i], 7, columnas[i], border=1, align='C')
         pdf.ln()
         
+        # Detalle con fuente 7pt
         pdf.set_font("Arial", '', 7)
         for index, row in dataframe_gerencia.iterrows():
             pdf.cell(anchos[0], 6, row['Fecha'].strftime('%d/%m/%Y'), border=1, align='C')
