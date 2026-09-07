@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
 st.title("Generador de Reportes de Producción")
 
-# ID de Google Drive
+# ID de Google Drive (ya integrado)
 ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
@@ -16,6 +16,33 @@ def fmt3(val):
         return f"{val:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return str(val)
+
+# Función para interpretar el lote y extraer Producto y Grupo
+def procesar_lote(lote_str):
+    if not isinstance(lote_str, str) or len(lote_str) < 8:
+        return "Desconocido", "Desconocido"
+    
+    # Los 3 dígitos que van desde el índice 5 al 8 determinan el producto
+    prod_code = lote_str[5:8]
+    
+    mapping_prod = {
+        '288': 'Muzzarella Exportacion Coop.',
+        '125': 'Muzarrella Piano',
+        '488': 'Tybo Coop.',
+        '840': 'Muzzarella Exportacion Mastellone'
+    }
+    
+    mapping_grupo = {
+        '288': 'Coopagro',
+        '125': 'Coopagro',
+        '488': 'Coopagro',
+        '840': 'Mastellone'
+    }
+    
+    producto = mapping_prod.get(prod_code, f"Desconocido ({prod_code})")
+    grupo = mapping_grupo.get(prod_code, 'Otro')
+    
+    return producto, grupo
 
 try:
     st.info("Leyendo datos directamente desde Google Drive...")
@@ -35,36 +62,38 @@ try:
     for col in ["Litros Procesados", "Producto Terminado", "PNC"]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
+    # Extraemos Producto y Grupo a partir del Lote
+    df['Producto'], df['Grupo'] = zip(*df['Lote'].astype(str).apply(procesar_lote))
+
     # Cálculo del Ratio de Conversión (%) por fila con 3 decimales
     df['Ratio de Conversión (%)'] = df.apply(
         lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.3f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,000%", 
         axis=1
     )
 
-    # Filtros laterales
+    # FILTROS LATERALES (Sin semana, con Año, Mes y Grupo)
     st.sidebar.header("Filtros de Búsqueda")
     
     df['Año'] = df['Fecha'].dt.year
     df['Mes'] = df['Fecha'].dt.month
-    df['Semana'] = df['Fecha'].dt.isocalendar().week
 
     opciones_anio = ["Todos"] + sorted(df['Año'].unique().tolist())
     opciones_mes = ["Todos"] + sorted(df['Mes'].unique().tolist())
-    opciones_semana = ["Todos"] + sorted(df['Semana'].unique().tolist())
+    opciones_grupo = ["Todos", "Coopagro", "Mastellone"]
 
     filtro_anio = st.sidebar.selectbox("Seleccionar Año", opciones_anio)
     filtro_mes = st.sidebar.selectbox("Seleccionar Mes", opciones_mes)
-    filtro_semana = st.sidebar.selectbox("Seleccionar Semana", opciones_semana)
+    filtro_grupo = st.sidebar.selectbox("Seleccionar Grupo", opciones_grupo)
 
     df_filtrado = df.copy()
     if filtro_anio != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Año'] == filtro_anio]
     if filtro_mes != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Mes'] == filtro_mes]
-    if filtro_semana != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Semana'] == filtro_semana]
+    if filtro_grupo != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Grupo'] == filtro_grupo]
 
-    df_filtrado = df_filtrado.drop(columns=['Año', 'Mes', 'Semana'])
+    df_filtrado = df_filtrado.drop(columns=['Año', 'Mes', 'Grupo'])
 
     # Totales para métricas
     total_litros = df_filtrado['Litros Procesados'].sum()
@@ -89,7 +118,7 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF en A4 vertical con anchos optimizados
+    # Función para generar el PDF en A4 vertical con 7 columnas optimizadas (Suma 188mm)
     def generar_pdf_bytes(dataframe_original):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
@@ -97,23 +126,25 @@ try:
         pdf.cell(190, 10, txt="Reporte de Producción", ln=True, align='C')
         pdf.ln(5)
         
-        pdf.set_font("Arial", 'B', 8)
-        # Anchos ajustados: Lote ahora mide 32mm para albergar códigos largos sin desbordarse
-        anchos = [24, 32, 35, 35, 26, 38]
+        pdf.set_font("Arial", 'B', 7)
+        # Anchos de columnas ajustados para las 7 columnas dentro de la hoja A4 vertical
+        # [Fecha, Lote, Producto, Litros Procesados, Producto Terminado, PNC, Ratio]
+        anchos = [20, 26, 38, 28, 28, 20, 28]
         columnas = dataframe_original.columns.tolist()
         
         for i in range(len(columnas)):
             pdf.cell(anchos[i], 8, columnas[i], border=1, align='C')
         pdf.ln()
         
-        pdf.set_font("Arial", '', 8)
+        pdf.set_font("Arial", '', 7)
         for index, row in dataframe_original.iterrows():
             pdf.cell(anchos[0], 7, row['Fecha'].strftime('%d/%m/%Y'), border=1, align='C')
             pdf.cell(anchos[1], 7, str(row['Lote']), border=1, align='C')
-            pdf.cell(anchos[2], 7, fmt3(row['Litros Procesados']), border=1, align='R')
-            pdf.cell(anchos[3], 7, fmt3(row['Producto Terminado']), border=1, align='R')
-            pdf.cell(anchos[4], 7, fmt3(row['PNC']), border=1, align='R')
-            pdf.cell(anchos[5], 7, row['Ratio de Conversión (%)'], border=1, align='C')
+            pdf.cell(anchos[2], 7, str(row['Producto']), border=1, align='L')
+            pdf.cell(anchos[3], 7, fmt3(row['Litros Procesados']), border=1, align='R')
+            pdf.cell(anchos[4], 7, fmt3(row['Producto Terminado']), border=1, align='R')
+            pdf.cell(anchos[5], 7, fmt3(row['PNC']), border=1, align='R')
+            pdf.cell(anchos[6], 7, row['Ratio de Conversión (%)'], border=1, align='C')
             pdf.ln()
             
         pdf_output = pdf.output(dest='S')
