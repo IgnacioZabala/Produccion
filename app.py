@@ -4,10 +4,10 @@ from fpdf import FPDF
 import os
 
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
-st.title("Reporte de producción")
+st.title("🏭 Reporte de producción")
 
 # ID de Google Drive (ya integrado)
-ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
+ID_DEL_ARCHIVO = "PEGAR_TU_ID_AQUI" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
 # Función para formatear números con punto para miles y coma para decimales (2 decimales)
@@ -114,7 +114,16 @@ try:
     }
 
     mes_str = meses_nombres.get(filtro_mes, "") if filtro_mes != "Todos" else ""
-    anio_str = str(filtro_anio) if filtro_anio != "Todos" else ""
+    
+    if filtro_anio != "Todos":
+        anio_str = str(filtro_anio)
+    else:
+        if len(df_filtrado) > 0:
+            anios_unicos = df_filtrado['Fecha'].dt.year.unique()
+            anio_str = str(anios_unicos[0]) if len(anios_unicos) == 1 else "2026"
+        else:
+            anio_str = "2026"
+
     titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
 
     # Totales y métricas globales
@@ -126,7 +135,7 @@ try:
     pnc_promedio = (total_pnc / total_litros * 100) if total_litros > 0 else 0
 
     # Mostrar métricas rápidas en pantalla
-    st.subheader("Resumen")
+    st.subheader("📊 Resumen")
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Litros Procesados", fmt2(total_litros))
     col2.metric("Prod. Terminado", fmt2(total_prod))
@@ -135,7 +144,7 @@ try:
     col5.metric("% PNC Global", f"{pnc_promedio:.2f}%".replace(".", ","))
 
     # Resumen por producto en pantalla con ratio
-    st.subheader("Cantidad por Producto")
+    st.subheader("📦 Cantidad por Producto")
     resumen_prod = df_filtrado.groupby('Producto')[['Litros Procesados', 'Producto Terminado', 'PNC']].sum().reset_index()
     resumen_prod['Ratio de Conversión (%)'] = resumen_prod.apply(
         lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", 
@@ -148,7 +157,7 @@ try:
     st.dataframe(resumen_display, use_container_width=True)
 
     # Detalle de lotes en pantalla
-    st.subheader("Detalle de Lotes")
+    st.subheader("📋 Detalle de Lotes")
     df_display = df_filtrado.copy()
     df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt2)
     df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt2)
@@ -157,7 +166,7 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF con el título dinámico por mes y año
+    # Función para generar el PDF con el título dinámico completo (Mes y Año)
     def generar_pdf_bytes(dataframe_original, titulo_dinamico):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
