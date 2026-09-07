@@ -46,13 +46,15 @@ def procesar_lote(lote_str):
 try:
     st.info("Leyendo datos directamente desde Google Drive...")
     
-    # Lectura del Excel
-    df = pd.read_excel(
-        URL_DRIVE, 
-        skiprows=6, 
-        usecols=[0, 1, 3, 5, 6], 
-        names=["Fecha", "Lote", "Litros Procesados", "Producto Terminado", "PNC"]
-    )
+    # LECTURA ROBUSTA POR POSICIÓN (Evita errores de nombres duplicados)
+    raw_df = pd.read_excel(URL_DRIVE, skiprows=6)
+    
+    df = pd.DataFrame()
+    df['Fecha'] = raw_df.iloc[:, 0]
+    df['Lote'] = raw_df.iloc[:, 1]
+    df['Litros Procesados'] = raw_df.iloc[:, 3]
+    df['Producto Terminado'] = raw_df.iloc[:, 5]
+    df['PNC'] = raw_df.iloc[:, 6]
     
     df = df.dropna(subset=['Fecha'])
     df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
@@ -76,19 +78,17 @@ try:
         axis=1
     )
 
-    # ORDEN EXPLICITO DE COLUMNAS (Asegura que queden en el orden lógico correcto)
+    # ORDEN EXPLICITO DE COLUMNAS
     columnas_ordenadas = [
         'Fecha', 'Lote', 'Producto', 'Litros Procesados', 
         'Producto Terminado', 'PNC', '% PNC', 'Ratio de Conversión (%)'
     ]
-    df = df[columnas_ordenadas + ['Año' if 'Año' in df else 'Fecha', 'Mes' if 'Mes' in df else 'Fecha', 'Grupo']] # Mantenemos temporales temporalmente
-
-    # FILTROS LATERALES (Solo Año, Mes y Grupo)
-    st.sidebar.header("Filtros de Búsqueda")
-    
     df['Año'] = df['Fecha'].dt.year
     df['Mes'] = df['Fecha'].dt.month
 
+    # FILTROS LATERALES
+    st.sidebar.header("Filtros de Búsqueda")
+    
     opciones_anio = ["Todos"] + sorted(df['Año'].unique().tolist())
     opciones_mes = ["Todos"] + sorted(df['Mes'].unique().tolist())
     opciones_grupo = ["Todos", "Coopagro", "Mastellone"]
@@ -144,8 +144,7 @@ try:
         
         pdf.set_font("Arial", 'B', 6)
         
-        # Anchos exactos que suman 190 mm (PNC achicado a 14mm, Producto ampliado a 40mm)
-        # Orden: Fecha, Lote, Producto, Litros, Terminado, PNC, % PNC, Ratio
+        # Anchos exactos que suman 190 mm
         anchos = [18, 24, 40, 24, 24, 14, 16, 30]
         columnas = dataframe_original.columns.tolist()
         
