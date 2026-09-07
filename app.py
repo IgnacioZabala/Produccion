@@ -46,7 +46,7 @@ def procesar_lote(lote_str):
 try:
     st.info("Leyendo datos directamente desde Google Drive...")
     
-    # LECTURA ROBUSTA POR POSICIÓN (Evita errores de nombres duplicados)
+    # Lectura robusta por posición
     raw_df = pd.read_excel(URL_DRIVE, skiprows=6)
     
     df = pd.DataFrame()
@@ -78,7 +78,6 @@ try:
         axis=1
     )
 
-    # ORDEN EXPLICITO DE COLUMNAS
     columnas_ordenadas = [
         'Fecha', 'Lote', 'Producto', 'Litros Procesados', 
         'Producto Terminado', 'PNC', '% PNC', 'Ratio de Conversión (%)'
@@ -86,7 +85,7 @@ try:
     df['Año'] = df['Fecha'].dt.year
     df['Mes'] = df['Fecha'].dt.month
 
-    # FILTROS LATERALES
+    # Filtros laterales
     st.sidebar.header("Filtros de Búsqueda")
     
     opciones_anio = ["Todos"] + sorted(df['Año'].unique().tolist())
@@ -105,7 +104,6 @@ try:
     if filtro_grupo != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Grupo'] == filtro_grupo]
 
-    # Nos quedamos estrictamente con las 8 columnas finales ordenadas
     df_filtrado = df_filtrado[columnas_ordenadas]
 
     # Totales y métricas globales
@@ -113,19 +111,25 @@ try:
     total_prod = df_filtrado['Producto Terminado'].sum()
     total_pnc = df_filtrado['PNC'].sum()
     
-    ratio_promedio = (total_prod / total_litros * 100) if total_litros > 0 else 0
+    ratio_ponderado = (total_prod / total_litros * 100) if total_litros > 0 else 0
     pnc_promedio = (total_pnc / total_litros * 100) if total_litros > 0 else 0
 
-    # Mostrar métricas rápidas (5 columnas)
+    # Mostrar métricas rápidas en pantalla
     st.subheader("📊 Resumen de Producción y Calidad")
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Litros Procesados", fmt3(total_litros))
     col2.metric("Prod. Terminado", fmt3(total_prod))
     col3.metric("Total PNC", fmt3(total_pnc))
-    col4.metric("Ratio Conversión", f"{ratio_promedio:.3f}%".replace(".", ","))
+    col4.metric("Ratio Ponderado", f"{ratio_ponderado:.3f}%".replace(".", ","))
     col5.metric("% PNC Global", f"{pnc_promedio:.3f}%".replace(".", ","))
 
-    # Preparamos una copia visual para la tabla web
+    # Resumen por producto en pantalla
+    st.subheader("📦 Producción por Producto")
+    resumen_prod = df_filtrado.groupby('Producto')[['Litros Procesados', 'Producto Terminado', 'PNC']].sum().reset_index()
+    st.dataframe(resumen_prod, use_container_width=True)
+
+    # Detalle de lotes en pantalla
+    st.subheader("📋 Detalle de Lotes")
     df_display = df_filtrado.copy()
     df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt3)
     df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt3)
@@ -134,34 +138,69 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF en A4 vertical optimizado para 8 columnas
+    # Función para generar el PDF con el Resumen Ejecutivo Arriba
     def generar_pdf_bytes(dataframe_original):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(190, 10, txt="Reporte de Producción y Calidad", ln=True, align='C')
+        
+        # Título principal
+        pdf.set_font("Arial", 'B', 13)
+        pdf.cell(190, 7, txt="Reporte de Producción y Calidad", ln=True, align='C')
+        pdf.ln(3)
+        
+        # --- SECCIÓN DE RESUMEN EJECUTIVO ARRIBA ---
+        pdf.set_font("Arial", 'B', 9)
+        pdf.cell(190, 5, txt="Resumen Ejecutivo", ln=True, align='L')
+        
+        pdf.set_font("Arial", '', 8)
+        tot_lit = dataframe_original['Litros Procesados'].sum()
+        tot_pro = dataframe_original['Producto Terminado'].sum()
+        tot_pn = dataframe_original['PNC'].sum()
+        rat_pond = (tot_pro / tot_lit * 100) if tot_lit > 0 else 0
+        pnc_glob = (tot_pn / tot_lit * 100) if tot_lit > 0 else 0
+        
+        pdf.cell(95, 5, txt=f"Total Litros Procesados: {fmt3(tot_lit)}", ln=0)
+        pdf.cell(95, 5, txt=f"Ratio Ponderado: {rat_pond:.3f}%".replace(".", ","), ln=1)
+        pdf.cell(95, 5, txt=f"Total Producto Terminado: {fmt3(tot_pro)}", ln=0)
+        pdf.cell(95, 5, txt=f"Total PNC: {fmt3(tot_pn)} (% PNC Global: {pnc_glob:.3f}%)".replace(".", ","), ln=1)
+        pdf.ln(2)
+        
+        # Desglose de cantidad por producto
+        pdf.set_font("Arial", 'B', 9)
+        pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
+        pdf.set_font("Arial", '', 7.5)
+        
+        prod_res = dataframe_original.groupby('Producto')[['Litros Procesados', 'Producto Terminado']].sum().reset_index()
+        for idx, row in prod_res.iterrows():
+            txt_linea = f"- {row['Producto']}: Litros Proc. {fmt3(row['Litros Procesados'])} | Prod. Terminado: {fmt3(row['Producto Terminado'])}"
+            pdf.cell(190, 4.5, txt=txt_linea, ln=True)
+            
         pdf.ln(4)
+        # -------------------------------------------
+        
+        # Título de la tabla de detalle
+        pdf.set_font("Arial", 'B', 9)
+        pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
+        pdf.ln(2)
         
         pdf.set_font("Arial", 'B', 6)
-        
-        # Anchos exactos que suman 190 mm
         anchos = [18, 24, 40, 24, 24, 14, 16, 30]
         columnas = dataframe_original.columns.tolist()
         
         for i in range(len(columnas)):
-            pdf.cell(anchos[i], 8, columnas[i], border=1, align='C')
+            pdf.cell(anchos[i], 7, columnas[i], border=1, align='C')
         pdf.ln()
         
         pdf.set_font("Arial", '', 6.5)
         for index, row in dataframe_original.iterrows():
-            pdf.cell(anchos[0], 7, row['Fecha'].strftime('%d/%m/%Y'), border=1, align='C')
-            pdf.cell(anchos[1], 7, str(row['Lote']), border=1, align='C')
-            pdf.cell(anchos[2], 7, str(row['Producto']), border=1, align='L')
-            pdf.cell(anchos[3], 7, fmt3(row['Litros Procesados']), border=1, align='R')
-            pdf.cell(anchos[4], 7, fmt3(row['Producto Terminado']), border=1, align='R')
-            pdf.cell(anchos[5], 7, fmt3(row['PNC']), border=1, align='R')
-            pdf.cell(anchos[6], 7, row['% PNC'], border=1, align='C')
-            pdf.cell(anchos[7], 7, row['Ratio de Conversión (%)'], border=1, align='C')
+            pdf.cell(anchos[0], 6, row['Fecha'].strftime('%d/%m/%Y'), border=1, align='C')
+            pdf.cell(anchos[1], 6, str(row['Lote']), border=1, align='C')
+            pdf.cell(anchos[2], 6, str(row['Producto']), border=1, align='L')
+            pdf.cell(anchos[3], 6, fmt3(row['Litros Procesados']), border=1, align='R')
+            pdf.cell(anchos[4], 6, fmt3(row['Producto Terminado']), border=1, align='R')
+            pdf.cell(anchos[5], 6, fmt3(row['PNC']), border=1, align='R')
+            pdf.cell(anchos[6], 6, row['% PNC'], border=1, align='C')
+            pdf.cell(anchos[7], 6, row['Ratio de Conversión (%)'], border=1, align='C')
             pdf.ln()
             
         pdf_output = pdf.output(dest='S')
