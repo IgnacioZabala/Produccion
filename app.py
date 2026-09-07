@@ -9,7 +9,7 @@ st.title("Reporte de producción y recepción de leche")
 # ==========================================
 # CONFIGURACIÓN DE IDs DE GOOGLE DRIVE
 # ==========================================
-ID_PRODUCCION = "16Uh0EwP8tyW79TfJlvcjE8li5Lc6RSLj"
+ID_PRODUCCION = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf"
 ID_RECIBO = "16Uh0EwP8tyW79TfJlvcjE8li5Lc6RSLj"
 
 URL_PRODUCCION = f"https://drive.google.com/uc?id={ID_PRODUCCION}"
@@ -61,7 +61,13 @@ try:
     for col in ["Litros Procesados", "Producto Terminado", "PNC"]:
         df_prod[col] = pd.to_numeric(df_prod[col], errors='coerce').fillna(0)
 
-    df_prod['Producto'], df_prod['Grupo'] = zip(*df_prod['Lote'].astype(str).apply(procesar_lote))
+    # SEGURIDAD: Validar si hay filas antes de desempaquetar
+    if len(df_prod) > 0:
+        df_prod['Producto'], df_prod['Grupo'] = zip(*df_prod['Lote'].astype(str).apply(procesar_lote))
+    else:
+        df_prod['Producto'] = []
+        df_prod['Grupo'] = []
+
     df_prod['Año'] = df_prod['Fecha'].dt.year
     df_prod['Mes'] = df_prod['Fecha'].dt.month
 
@@ -93,8 +99,8 @@ try:
 
     # Filtros laterales
     st.sidebar.header("Filtros de Búsqueda")
-    opciones_anio = ["Todos"] + sorted(df_prod['Año'].unique().tolist())
-    opciones_mes = ["Todos"] + sorted(df_prod['Mes'].unique().tolist())
+    opciones_anio = ["Todos"] + (sorted(df_prod['Año'].unique().tolist()) if len(df_prod) > 0 else [])
+    opciones_mes = ["Todos"] + (sorted(df_prod['Mes'].unique().tolist()) if len(df_prod) > 0 else [])
     opciones_grupo = ["Todos", "Coopagro", "Mastellone"]
 
     filtro_anio = st.sidebar.selectbox("Seleccionar Año", opciones_anio)
@@ -103,24 +109,29 @@ try:
 
     # Filtrar Producción
     df_filtrado = df_prod.copy()
-    if filtro_anio != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Año'] == filtro_anio]
-    if filtro_mes != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Mes'] == filtro_mes]
-    if filtro_grupo != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Grupo'] == filtro_grupo]
+    if len(df_filtrado) > 0:
+        if filtro_anio != "Todos":
+            df_filtrado = df_filtrado[df_filtrado['Año'] == filtro_anio]
+        if filtro_mes != "Todos":
+            df_filtrado = df_filtrado[df_filtrado['Mes'] == filtro_mes]
+        if filtro_grupo != "Todos":
+            df_filtrado = df_filtrado[df_filtrado['Grupo'] == filtro_grupo]
 
     columnas_ordenadas = [
         'Fecha', 'Lote', 'Producto', 'Litros Procesados', 
         'Producto Terminado', 'PNC', '% PNC', 'Ratio de Conversión (%)'
     ]
-    df_filtrado['Ratio de Conversión (%)'] = df_filtrado.apply(
-        lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", axis=1
-    )
-    df_filtrado['% PNC'] = df_filtrado.apply(
-        lambda x: f"{(x['PNC'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", axis=1
-    )
-    df_filtrado = df_filtrado[columnas_ordenadas]
+    
+    if len(df_filtrado) > 0:
+        df_filtrado['Ratio de Conversión (%)'] = df_filtrado.apply(
+            lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", axis=1
+        )
+        df_filtrado['% PNC'] = df_filtrado.apply(
+            lambda x: f"{(x['PNC'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", axis=1
+        )
+        df_filtrado = df_filtrado[columnas_ordenadas]
+    else:
+        df_filtrado = pd.DataFrame(columns=columnas_ordenadas)
 
     # Filtrar Recibo
     df_recibo_filtrado = recibo_mensual.copy()
@@ -132,9 +143,9 @@ try:
     total_litros_ingresados = df_recibo_filtrado['Litros Ingresados'].sum()
 
     # Totales globales
-    total_litros_proc = df_filtrado['Litros Procesados'].sum()
-    total_prod = df_filtrado['Producto Terminado'].sum()
-    total_pnc = df_filtrado['PNC'].sum()
+    total_litros_proc = df_filtrado['Litros Procesados'].sum() if len(df_filtrado) > 0 else 0
+    total_prod = df_filtrado['Producto Terminado'].sum() if len(df_filtrado) > 0 else 0
+    total_pnc = df_filtrado['PNC'].sum() if len(df_filtrado) > 0 else 0
     
     ratio_ponderado = (total_prod / total_litros_proc * 100) if total_litros_proc > 0 else 0
     pnc_promedio = (total_pnc / total_litros_proc * 100) if total_litros_proc > 0 else 0
@@ -170,25 +181,29 @@ try:
 
     # Resumen por producto en pantalla
     st.subheader("Cantidad por Producto")
-    resumen_prod = df_filtrado.groupby('Producto')[['Litros Procesados', 'Producto Terminado', 'PNC']].sum().reset_index()
-    resumen_prod['Ratio de Conversión (%)'] = resumen_prod.apply(
-        lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", 
-        axis=1
-    )
-    resumen_display = resumen_prod.copy()
-    resumen_display['Litros Procesados'] = resumen_display['Litros Procesados'].apply(fmt2)
-    resumen_display['Producto Terminado'] = resumen_display['Producto Terminado'].apply(fmt2)
-    resumen_display['PNC'] = resumen_display['PNC'].apply(fmt2)
-    st.dataframe(resumen_display, use_container_width=True)
+    if len(df_filtrado) > 0:
+        resumen_prod = df_filtrado.groupby('Producto')[['Litros Procesados', 'Producto Terminado', 'PNC']].sum().reset_index()
+        resumen_prod['Ratio de Conversión (%)'] = resumen_prod.apply(
+            lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", 
+            axis=1
+        )
+        resumen_display = resumen_prod.copy()
+        resumen_display['Litros Procesados'] = resumen_display['Litros Procesados'].apply(fmt2)
+        resumen_display['Producto Terminado'] = resumen_display['Producto Terminado'].apply(fmt2)
+        resumen_display['PNC'] = resumen_display['PNC'].apply(fmt2)
+        st.dataframe(resumen_display, use_container_width=True)
+    else:
+        st.info("No hay datos para mostrar con los filtros seleccionados.")
 
     # Detalle de lotes en pantalla
     st.subheader("Detalle de Lotes")
-    df_display = df_filtrado.copy()
-    df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt2)
-    df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt2)
-    df_display['PNC'] = df_display['PNC'].apply(fmt2)
-    df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
-    st.dataframe(df_display, use_container_width=True)
+    if len(df_filtrado) > 0:
+        df_display = df_filtrado.copy()
+        df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt2)
+        df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt2)
+        df_display['PNC'] = df_display['PNC'].apply(fmt2)
+        df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
+        st.dataframe(df_display, use_container_width=True)
 
     # Función para generar el PDF completo
     def generar_pdf_bytes(dataframe_original, titulo_dinamico, lit_ingresados, rend_ingreso):
