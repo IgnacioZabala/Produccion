@@ -262,96 +262,63 @@ try:
     # ------------------ PESTAÑA INTERNA ------------------
     with tab_interno:
         st.markdown("### 📈 Indicadores Principales")
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        
+        # Fila 1 de métricas
+        c1, c2, c3 = st.columns(3)
         c1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
         c2.metric("Litros Procesados", fmt2(total_litros_proc))
         c3.metric("Prod. Terminado", fmt2(total_prod))
+        
+        # Fila 2 de métricas
+        c4, c5, c6 = st.columns(3)
         c4.metric("Total PNC", fmt2(total_pnc))
         c5.metric("Ratio Ponderado", f"{ratio_ponderado:.2f}%".replace(".", ","))
         c6.metric("Rend. Ingreso vs Term.", f"{rendimiento_ingreso:.2f}%".replace(".", ","))
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        col_graf_1, col_graf_2 = st.columns([1, 2])
-        
-        with col_graf_1:
-            st.markdown("### 📦 Por Producto")
-            if len(df_filtrado) > 0:
-                resumen_prod = df_filtrado.groupby('Producto')[['Litros Procesados', 'Producto Terminado', 'PNC']].sum().reset_index()
-                resumen_prod['Ratio (%)'] = resumen_prod.apply(
-                    lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", 
-                    axis=1
-                )
-                resumen_display = resumen_prod.copy()
-                resumen_display['Litros Procesados'] = resumen_display['Litros Procesados'].apply(fmt2)
-                resumen_display['Producto Terminado'] = resumen_display['Producto Terminado'].apply(fmt2)
-                resumen_display['PNC'] = resumen_display['PNC'].apply(fmt2)
-                st.dataframe(resumen_display, use_container_width=True, hide_index=True)
-            else:
-                st.info("Sin datos para agrupar por producto.")
-
-        with col_graf_2:
-            st.markdown("### 📋 Registro de Lotes")
-            if len(df_filtrado) > 0:
-                df_display = df_filtrado.copy()
-                df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt2)
-                df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt2)
-                df_display['PNC'] = df_display['PNC'].apply(fmt2)
-                df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=350)
-            else:
-                st.info("No hay lotes en el período seleccionado.")
+        st.markdown("### 📋 Registro de Lotes")
+        if len(df_filtrado) > 0:
+            df_display = df_filtrado.copy()
+            df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt2)
+            df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt2)
+            df_display['PNC'] = df_display['PNC'].apply(fmt2)
+            df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
+            st.dataframe(df_display, use_container_width=True, hide_index=True, height=350)
+        else:
+            st.info("No hay lotes en el período seleccionado.")
 
     # ------------------ PESTAÑA GERENCIA ------------------
     with tab_gerencia:
         st.markdown("### 📈 Indicadores Consolidados (PT + PNC)")
-        g1, g2, g3, g4, g5 = st.columns(5)
+        
+        # Fila 1 de métricas
+        g1, g2, g3 = st.columns(3)
         g1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
         g2.metric("Litros Procesados", fmt2(total_litros_proc))
         g3.metric("Total Prod. Term.", fmt2(total_prod_gerencia))
+        
+        # Fila 2 de métricas
+        g4, g5, g6 = st.columns(3) # Dejamos la 3ra vacía para mantener proporciones
         g4.metric("Ratio PT / Litros Proc.", f"{ratio_ponderado_gerencia:.2f}%".replace(".", ","))
         g5.metric("Ratio PT / Litros Ing.", f"{rendimiento_ingreso_gerencia:.2f}%".replace(".", ","))
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        col_graf_1g, col_graf_2g = st.columns([1, 2])
-        
-        with col_graf_1g:
-            st.markdown("### 📦 Por Producto")
-            if len(df_gerencia) > 0:
-                df_gerencia_raw_tmp = df_prod.copy()
-                if filtro_anio != "Todos": df_gerencia_raw_tmp = df_gerencia_raw_tmp[df_gerencia_raw_tmp['Año'] == filtro_anio]
-                if filtro_mes != "Todos": df_gerencia_raw_tmp = df_gerencia_raw_tmp[df_gerencia_raw_tmp['Mes'] == filtro_mes]
-                if filtro_grupo != "Todos": df_gerencia_raw_tmp = df_gerencia_raw_tmp[df_gerencia_raw_tmp['Grupo'] == filtro_grupo]
-                
-                df_gerencia_raw_tmp['PT_Total'] = df_gerencia_raw_tmp['Producto Terminado'] + df_gerencia_raw_tmp['PNC']
-                res_ger_prod = df_gerencia_raw_tmp.groupby('Producto')[['Litros Procesados', 'PT_Total']].sum().reset_index()
-                res_ger_prod['Ratio (%)'] = res_ger_prod.apply(
-                    lambda x: f"{(x['PT_Total'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", axis=1
-                )
-                res_ger_display = res_ger_prod.copy()
-                res_ger_display['Litros Procesados'] = res_ger_display['Litros Procesados'].apply(fmt2)
-                res_ger_display['PT_Total'] = res_ger_display['PT_Total'].apply(fmt2)
-                res_ger_display = res_ger_display.rename(columns={'PT_Total': 'Prod. Terminado'})
-                st.dataframe(res_ger_display, use_container_width=True, hide_index=True)
-            else:
-                st.info("Sin datos consolidados por producto.")
-
-        with col_graf_2g:
-            st.markdown("### 📋 Registro de Lotes")
-            if len(df_gerencia) > 0:
-                df_gerencia_display = df_gerencia.copy()
-                df_gerencia_display['Litros Procesados'] = df_gerencia_display['Litros Procesados'].apply(fmt2)
-                df_gerencia_display['Producto Terminado'] = df_gerencia_display['Producto Terminado'].apply(fmt2)
-                df_gerencia_display['Fecha'] = df_gerencia_display['Fecha'].dt.strftime('%d/%m/%Y')
-                st.dataframe(df_gerencia_display, use_container_width=True, hide_index=True, height=350)
-            else:
-                st.info("No hay lotes consolidados en el período.")
+        st.markdown("### 📋 Registro de Lotes")
+        if len(df_gerencia) > 0:
+            df_gerencia_display = df_gerencia.copy()
+            df_gerencia_display['Litros Procesados'] = df_gerencia_display['Litros Procesados'].apply(fmt2)
+            df_gerencia_display['Producto Terminado'] = df_gerencia_display['Producto Terminado'].apply(fmt2)
+            df_gerencia_display['Fecha'] = df_gerencia_display['Fecha'].dt.strftime('%d/%m/%Y')
+            st.dataframe(df_gerencia_display, use_container_width=True, hide_index=True, height=350)
+        else:
+            st.info("No hay lotes consolidados en el período.")
 
     # ==========================================
     # FUNCIONES DE EXPORTACIÓN (PDF)
     # ==========================================
-    def generar_pdf_interno(dataframe_original, titulo_dinamico, lit_ingresados, rend_ingreso, df_prod_raw):
+    def generar_pdf_interno(dataframe_original, titulo_dinamico, lit_ingresados, rend_ingreso):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", 'B', 13)
@@ -374,20 +341,7 @@ try:
         pdf.cell(95, 5, txt=f"Rendimiento Ingresado vs Term.: {rend_ingreso:.2f}%".replace(".", ","), ln=1)
         pdf.cell(95, 5, txt=f"Total Producto Terminado: {fmt2(tot_pro)}", ln=0)
         pdf.cell(95, 5, txt=f"Total PNC: {fmt2(tot_pn)} (% PNC Global: {pnc_glob:.2f}%)".replace(".", ","), ln=1)
-        pdf.ln(3)
-        
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
-        pdf.set_font("Arial", '', 8)
-        
-        prod_res = dataframe_original.groupby('Producto')[['Litros Procesados', 'Producto Terminado']].sum().reset_index()
-        for idx, row in prod_res.iterrows():
-            ratio_prod = (row['Producto Terminado'] / row['Litros Procesados'] * 100) if row['Litros Procesados'] > 0 else 0
-            ratio_prod_str = f"{ratio_prod:.2f}%".replace(".", ",")
-            txt_linea = f"- {row['Producto']}: Litros Proc. {fmt2(row['Litros Procesados'])} | Prod. Terminado: {fmt2(row['Producto Terminado'])} | Ratio: {ratio_prod_str}"
-            pdf.cell(190, 4.5, txt=txt_linea, ln=True)
-            
-        pdf.ln(4)
+        pdf.ln(6)
         
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
@@ -415,7 +369,7 @@ try:
         pdf_output = pdf.output(dest='S')
         return pdf_output.encode('latin1') if isinstance(pdf_output, str) else pdf_output
 
-    def generar_pdf_gerencia(dataframe_gerencia, titulo_dinamico, lit_ingresados, rend_gerencia, ratio_pond_gerenc, df_prod_raw_gerencia):
+    def generar_pdf_gerencia(dataframe_gerencia, titulo_dinamico, lit_ingresados, rend_gerencia, ratio_pond_gerenc):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", 'B', 13)
@@ -434,20 +388,7 @@ try:
         pdf.cell(95, 5, txt=f"Total Litros Procesados: {fmt2(tot_lit)}", ln=0)
         pdf.cell(95, 5, txt=f"Ratio PT / Litros ingresados: {rend_gerencia:.2f}%".replace(".", ","), ln=1)
         pdf.cell(95, 5, txt=f"Total Producto Terminado: {fmt2(tot_pro_ger)}", ln=1)
-        pdf.ln(3)
-        
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
-        pdf.set_font("Arial", '', 8)
-        
-        prod_res_ger = df_prod_raw_gerencia.groupby('Producto')[['Litros Procesados', 'PT_Total']].sum().reset_index()
-        for idx, row in prod_res_ger.iterrows():
-            ratio_prod = (row['PT_Total'] / row['Litros Procesados'] * 100) if row['Litros Procesados'] > 0 else 0
-            ratio_prod_str = f"{ratio_prod:.2f}%".replace(".", ",")
-            txt_linea = f"- {row['Producto']}: Litros Proc. {fmt2(row['Litros Procesados'])} | Prod. Terminado: {fmt2(row['PT_Total'])} | Ratio: {ratio_prod_str}"
-            pdf.cell(190, 4.5, txt=txt_linea, ln=True)
-            
-        pdf.ln(4)
+        pdf.ln(6)
         
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
@@ -482,7 +423,7 @@ try:
     if len(df_filtrado) > 0:
         col_d1, col_d2 = st.columns(2)
         
-        pdf_interno = generar_pdf_interno(df_filtrado, titulo_pdf, total_litros_ingresados, rendimiento_ingreso, df_prod)
+        pdf_interno = generar_pdf_interno(df_filtrado, titulo_pdf, total_litros_ingresados, rendimiento_ingreso)
         with col_d1:
             st.download_button(
                 label="📄 Descargar Reporte Interno (PDF)",
@@ -492,13 +433,7 @@ try:
                 use_container_width=True
             )
             
-        df_gerencia_raw_pdf = df_prod.copy()
-        if filtro_anio != "Todos": df_gerencia_raw_pdf = df_gerencia_raw_pdf[df_gerencia_raw_pdf['Año'] == filtro_anio]
-        if filtro_mes != "Todos": df_gerencia_raw_pdf = df_gerencia_raw_pdf[df_gerencia_raw_pdf['Mes'] == filtro_mes]
-        if filtro_grupo != "Todos": df_gerencia_raw_pdf = df_gerencia_raw_pdf[df_gerencia_raw_pdf['Grupo'] == filtro_grupo]
-        df_gerencia_raw_pdf['PT_Total'] = df_gerencia_raw_pdf['Producto Terminado'] + df_gerencia_raw_pdf['PNC']
-
-        pdf_gerencia = generar_pdf_gerencia(df_gerencia, titulo_pdf, total_litros_ingresados, rendimiento_ingreso_gerencia, ratio_ponderado_gerencia, df_gerencia_raw_pdf)
+        pdf_gerencia = generar_pdf_gerencia(df_gerencia, titulo_pdf, total_litros_ingresados, rendimiento_ingreso_gerencia, ratio_ponderado_gerencia)
         with col_d2:
             st.download_button(
                 label="📊 Descargar Reporte Gerencia (PDF)",
