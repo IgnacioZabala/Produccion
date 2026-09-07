@@ -158,8 +158,6 @@ try:
         filtro_mes = st.selectbox("📆 Seleccionar Mes", opciones_mes)
         filtro_grupo = st.selectbox("🏢 Seleccionar Grupo", opciones_grupo)
         
-    st.sidebar.markdown("---")
-    st.sidebar.info("💡 **Tip:** Usa los filtros superiores para actualizar todas las vistas de la aplicación y el documento exportable.")
 
     # ==========================================
     # PROCESAMIENTO DE DATOS FILTRADOS
