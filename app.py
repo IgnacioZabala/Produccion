@@ -25,12 +25,19 @@ try:
     
     df = df.dropna(subset=['Fecha'])
     
-    # CAMBIO CLAVE: Le indicamos explícitamente a Pandas que el día va primero (dayfirst=True)
+    # Le indicamos explícitamente a Pandas que el día va primero
     df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
     df = df.dropna(subset=['Fecha'])
 
+    # Forzar conversión a números
     for col in ["Litros Procesados", "Producto Terminado", "PNC"]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+    # NUEVO: Cálculo del Ratio de Conversión (%) por fila
+    df['Ratio (%)'] = df.apply(
+        lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%" if x['Litros Procesados'] > 0 else "0.00%", 
+        axis=1
+    )
 
     # 3. FILTROS LATERALES
     st.sidebar.header("Filtros de Búsqueda")
@@ -57,41 +64,49 @@ try:
 
     df_filtrado = df_filtrado.drop(columns=['Año', 'Mes', 'Semana'])
     
-    # FORMATO dd/mm/aaaa: Aplicamos el formato final para que se vea así en pantalla y PDF
+    # FORMATO dd/mm/aaaa
     df_filtrado['Fecha'] = df_filtrado['Fecha'].dt.strftime('%d/%m/%Y')
 
-    # 4. Mostrar métricas rápidas
+    # 4. Mostrar métricas rápidas (AHORA CON 4 COLUMNAS)
     st.subheader("📊 Resumen de Producción (Datos Filtrados)")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Litros Procesados", f"{df_filtrado['Litros Procesados'].sum():.2f}")
-    col2.metric("Total Prod. Terminado", f"{df_filtrado['Producto Terminado'].sum():.2f}")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_litros = df_filtrado['Litros Procesados'].sum()
+    total_prod = df_filtrado['Producto Terminado'].sum()
+    ratio_promedio = (total_prod / total_litros * 100) if total_litros > 0 else 0
+
+    col1.metric("Total Litros Procesados", f"{total_litros:.2f}")
+    col2.metric("Total Prod. Terminado", f"{total_prod:.2f}")
     col3.metric("Total PNC", f"{df_filtrado['PNC'].sum():.2f}")
+    col4.metric("Ratio de Conversión Global", f"{ratio_promedio:.2f}%")
 
     st.dataframe(df_filtrado, use_container_width=True)
 
-    # 5. Función para generar el PDF
+    # 5. Función para generar el PDF (AHORA CON LA COLUMNA DE RATIO)
     def generar_pdf(dataframe):
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, txt="Reporte de Produccion", ln=True, align='C')
+        pdf.cell(190, 10, txt="Reporte de Produccion", ln=True, align='C')
         pdf.ln(10)
         
-        pdf.set_font("Arial", 'B', 10)
-        anchos = [30, 30, 45, 45, 30]
+        pdf.set_font("Arial", 'B', 9)
+        # Ajustamos los anchos para que entren las 6 columnas en el ancho de la hoja (190mm)
+        anchos = [22, 18, 35, 35, 20, 25]
         columnas = dataframe.columns.tolist()
         
         for i in range(len(columnas)):
-            pdf.cell(anchos[i], 10, columnas[i], border=1, align='C')
+            pdf.cell(anchos[i], 10, columnas[i][:15], border=1, align='C') # [:15] acorta nombres muy largos en el título
         pdf.ln()
         
-        pdf.set_font("Arial", '', 10)
+        pdf.set_font("Arial", '', 9)
         for index, row in dataframe.iterrows():
             pdf.cell(anchos[0], 10, str(row['Fecha']), border=1, align='C')
             pdf.cell(anchos[1], 10, str(row['Lote']), border=1, align='C')
             pdf.cell(anchos[2], 10, str(row['Litros Procesados']), border=1, align='C')
             pdf.cell(anchos[3], 10, str(row['Producto Terminado']), border=1, align='C')
             pdf.cell(anchos[4], 10, str(row['PNC']), border=1, align='C')
+            pdf.cell(anchos[5], 10, str(row['Ratio (%)']), border=1, align='C')
             pdf.ln()
             
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
