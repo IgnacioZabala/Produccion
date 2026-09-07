@@ -8,7 +8,7 @@ import os
 # Configuración de la página
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
 
-st.title("🏭 Generador de Reportes de Producción")
+st.title("Generador de Reportes de Producción")
 st.markdown("Subí el archivo **RE-PRO-52 Registro produccion.xlsx** para visualizar los datos y descargar el reporte en PDF.")
 
 # 1. Carga del archivo Excel
