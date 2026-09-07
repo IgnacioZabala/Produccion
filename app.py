@@ -1,16 +1,13 @@
 import streamlit as st
 import pandas as pd
-from fpy import FPDF # or fpdf
-import os
-
-# Configurar fpdf import compatible
 from fpdf import FPDF
+import os
 
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
 st.title("Generador de Reportes de Producción")
 
-# ID de Google Drive (ya integrado)
-ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" # Reemplazá con tu ID real de Drive
+# ID de Google Drive (Reemplazá con tu ID real si hace falta)
+ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
 # Función para formatear números con 3 decimales: 1.234.567,890
@@ -101,7 +98,7 @@ try:
         pdf.ln(5)
         
         pdf.set_font("Arial", 'B', 8)
-        # Anchos exactos que suman 190mm (ancho útil de hoja A4 vertical con margenes de 10mm)
+        # Anchos exactos que suman 190mm (ancho útil de hoja A4 vertical con márgenes de 10mm)
         anchos = [25, 15, 40, 40, 25, 45]
         columnas = dataframe_original.columns.tolist()
         
