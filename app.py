@@ -5,7 +5,7 @@ import tempfile
 import os
 
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
-st.title("🏭 Generador de Reportes de Producción")
+st.title("Generador de Reportes de Producción")
 
 # 1. Conexión directa a Google Drive
 # Reemplazá esto con el ID de tu archivo
@@ -15,34 +15,61 @@ URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 try:
     st.info("Leyendo datos directamente desde Google Drive...")
     
-    # 2. Lectura del Excel desde la nube indicando dónde arrancan los datos
+    # 2. Lectura del Excel
     df = pd.read_excel(
         URL_DRIVE, 
-        skiprows=6, # <--- ACÁ ESTÁ LA CLAVE: Saltea las filas 1 a 6.
+        skiprows=6, 
         usecols=[0, 1, 3, 5, 6], 
         names=["Fecha", "Lote", "Litros Procesados", "Producto Terminado", "PNC"]
     )
     
-    # Limpieza: quitamos filas donde la Fecha esté vacía
     df = df.dropna(subset=['Fecha'])
     
-    # Convertimos la fecha para que se vea bien
-    df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce').dt.strftime('%d/%m/%Y')
-    
-    # Forzar conversión a números para evitar errores si hay texto mezclado
+    # CAMBIO CLAVE: Le indicamos explícitamente a Pandas que el día va primero (dayfirst=True)
+    df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+    df = df.dropna(subset=['Fecha'])
+
     for col in ["Litros Procesados", "Producto Terminado", "PNC"]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    # 3. Mostrar métricas rápidas
-    st.subheader("📊 Resumen de Producción")
+    # 3. FILTROS LATERALES
+    st.sidebar.header("Filtros de Búsqueda")
+    
+    df['Año'] = df['Fecha'].dt.year
+    df['Mes'] = df['Fecha'].dt.month
+    df['Semana'] = df['Fecha'].dt.isocalendar().week
+
+    opciones_anio = ["Todos"] + sorted(df['Año'].unique().tolist())
+    opciones_mes = ["Todos"] + sorted(df['Mes'].unique().tolist())
+    opciones_semana = ["Todos"] + sorted(df['Semana'].unique().tolist())
+
+    filtro_anio = st.sidebar.selectbox("Seleccionar Año", opciones_anio)
+    filtro_mes = st.sidebar.selectbox("Seleccionar Mes", opciones_mes)
+    filtro_semana = st.sidebar.selectbox("Seleccionar Semana", opciones_semana)
+
+    df_filtrado = df.copy()
+    if filtro_anio != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Año'] == filtro_anio]
+    if filtro_mes != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Mes'] == filtro_mes]
+    if filtro_semana != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Semana'] == filtro_semana]
+
+    df_filtrado = df_filtrado.drop(columns=['Año', 'Mes', 'Semana'])
+    
+    # FORMATO dd/mm/aaaa: Aplicamos el formato final para que se vea así en pantalla y PDF
+    df_filtrado['Fecha'] = df_filtrado['Fecha'].dt.strftime('%d/%m/%Y')
+
+    # 4. Mostrar métricas rápidas
+    st.subheader("📊 Resumen de Producción (Datos Filtrados)")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Litros Procesados", f"{df['Litros Procesados'].sum():.2f}")
-    col2.metric("Total Prod. Terminado", f"{df['Producto Terminado'].sum():.2f}")
-    col3.metric("Total PNC", f"{df['PNC'].sum():.2f}")
+    col1.metric("Total Litros Procesados", f"{df_filtrado['Litros Procesados'].sum():.2f}")
+    col2.metric("Total Prod. Terminado", f"{df_filtrado['Producto Terminado'].sum():.2f}")
+    col3.metric("Total PNC", f"{df_filtrado['PNC'].sum():.2f}")
 
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df_filtrado, use_container_width=True)
 
-    # 4. Función para generar el PDF
+    # 5. Función para generar el PDF
     def generar_pdf(dataframe):
         pdf = FPDF()
         pdf.add_page()
@@ -71,14 +98,17 @@ try:
         pdf.output(temp_file.name)
         return temp_file.name
 
-    # 5. Botón de Descarga
+    # 6. Botón de Descarga
     st.subheader("📥 Descargar Reporte")
-    if st.button("Generar PDF"):
-        with st.spinner("Generando documento..."):
-            ruta_pdf = generar_pdf(df)
-            with open(ruta_pdf, "rb") as pdf_file:
-                st.download_button(label="Descargar Reporte en PDF", data=pdf_file, file_name="Reporte_Produccion.pdf", mime="application/pdf")
-            os.unlink(ruta_pdf)
+    if len(df_filtrado) > 0:
+        if st.button("Generar PDF con los datos en pantalla"):
+            with st.spinner("Generando documento..."):
+                ruta_pdf = generar_pdf(df_filtrado)
+                with open(ruta_pdf, "rb") as pdf_file:
+                    st.download_button(label="Descargar Reporte en PDF", data=pdf_file, file_name="Reporte_Produccion.pdf", mime="application/pdf")
+                os.unlink(ruta_pdf)
+    else:
+        st.warning("No hay datos para los filtros seleccionados.")
             
 except Exception as e:
-    st.error(f"Hubo un error al leer el archivo de Drive: {e}")
+    st.error(f"Hubo un error al leer el archivo de Drive o procesar los datos: {e}")
