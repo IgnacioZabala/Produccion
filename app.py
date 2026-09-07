@@ -61,7 +61,6 @@ try:
     for col in ["Litros Procesados", "Producto Terminado", "PNC"]:
         df_prod[col] = pd.to_numeric(df_prod[col], errors='coerce').fillna(0)
 
-    # SEGURIDAD: Validar si hay filas antes de desempaquetar
     if len(df_prod) > 0:
         df_prod['Producto'], df_prod['Grupo'] = zip(*df_prod['Lote'].astype(str).apply(procesar_lote))
     else:
@@ -71,29 +70,17 @@ try:
     df_prod['Año'] = df_prod['Fecha'].dt.year
     df_prod['Mes'] = df_prod['Fecha'].dt.month
 
-    # 2. Leer Recibo de Leche (Columna D = índices 3, Año 2026 desde fila 375 en adelante)
+    # 2. Leer Recibo de Leche (Fecha en Columna B -> índice 1, Litros en Columna F -> índice 5)
     raw_recibo = pd.read_excel(URL_RECIBO)
     df_recibo = pd.DataFrame()
-    df_recibo['Fecha_Raw'] = raw_recibo.iloc[:, 0] 
-    df_recibo['Litros Ingresados'] = pd.to_numeric(raw_recibo.iloc[:, 3], errors='coerce').fillna(0)
+    df_recibo['Fecha_Raw'] = raw_recibo.iloc[:, 1] 
+    df_recibo['Litros Ingresados'] = pd.to_numeric(raw_recibo.iloc[:, 5], errors='coerce').fillna(0)
     
     df_recibo['Fecha'] = pd.to_datetime(df_recibo['Fecha_Raw'], dayfirst=True, errors='coerce')
+    df_recibo = df_recibo.dropna(subset=['Fecha'])
     
-    anios_recibo = []
-    meses_recibo = []
-    for idx, row in df_recibo.iterrows():
-        f = row['Fecha']
-        if idx >= 374: # Desde la fila 375 el año es 2026
-            anio = 2026
-        else:
-            anio = f.year if pd.notnull(f) else 2026
-            
-        mes = f.month if pd.notnull(f) else 1
-        anios_recibo.append(anio)
-        meses_recibo.append(mes)
-        
-    df_recibo['Año'] = anios_recibo
-    df_recibo['Mes'] = meses_recibo
+    df_recibo['Año'] = df_recibo['Fecha'].dt.year
+    df_recibo['Mes'] = df_recibo['Fecha'].dt.month
 
     recibo_mensual = df_recibo.groupby(['Año', 'Mes'])['Litros Ingresados'].sum().reset_index()
 
