@@ -4,9 +4,9 @@ from fpdf import FPDF
 import os
 
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
-st.title("Generador de Reportes de Producción")
+st.title("Generador de Reportes de Producción y Calidad")
 
-# ID de Google Drive (ya integrado)
+# ID de Google Drive
 ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
@@ -22,7 +22,6 @@ def procesar_lote(lote_str):
     if not isinstance(lote_str, str) or len(lote_str) < 8:
         return "Desconocido", "Desconocido"
     
-    # Los 3 dígitos que van desde el índice 5 al 8 determinan el producto
     prod_code = lote_str[5:8]
     
     mapping_prod = {
@@ -65,13 +64,19 @@ try:
     # Extraemos Producto y Grupo a partir del Lote
     df['Producto'], df['Grupo'] = zip(*df['Lote'].astype(str).apply(procesar_lote))
 
-    # Cálculo del Ratio de Conversión (%) por fila con 3 decimales
+    # Cálculo del Ratio de Conversión (%) por fila
     df['Ratio de Conversión (%)'] = df.apply(
         lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.3f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,000%", 
         axis=1
     )
 
-    # FILTROS LATERALES (Sin semana, con Año, Mes y Grupo)
+    # NUEVO: Cálculo del % de PNC por fila
+    df['% PNC'] = df.apply(
+        lambda x: f"{(x['PNC'] / x['Litros Procesados'] * 100):.3f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,000%", 
+        axis=1
+    )
+
+    # FILTROS LATERALES
     st.sidebar.header("Filtros de Búsqueda")
     
     df['Año'] = df['Fecha'].dt.year
@@ -95,21 +100,24 @@ try:
 
     df_filtrado = df_filtrado.drop(columns=['Año', 'Mes', 'Grupo'])
 
-    # Totales para métricas
+    # Totales y métricas globales
     total_litros = df_filtrado['Litros Procesados'].sum()
     total_prod = df_filtrado['Producto Terminado'].sum()
     total_pnc = df_filtrado['PNC'].sum()
+    
     ratio_promedio = (total_prod / total_litros * 100) if total_litros > 0 else 0
+    pnc_promedio = (total_pnc / total_litros * 100) if total_litros > 0 else 0
 
-    # Mostrar métricas rápidas con formato aplicado
-    st.subheader("📊 Resumen de Producción (Datos Filtrados)")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Litros Procesados", fmt3(total_litros))
-    col2.metric("Total Prod. Terminado", fmt3(total_prod))
+    # Mostrar métricas rápidas (5 columnas ahora)
+    st.subheader("📊 Resumen de Producción y Calidad")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Litros Procesados", fmt3(total_litros))
+    col2.metric("Prod. Terminado", fmt3(total_prod))
     col3.metric("Total PNC", fmt3(total_pnc))
-    col4.metric("Ratio de Conversión Global", f"{ratio_promedio:.3f}%".replace(".", ","))
+    col4.metric("Ratio Conversión", f"{ratio_promedio:.3f}%".replace(".", ","))
+    col5.metric("% PNC Global", f"{pnc_promedio:.3f}%".replace(".", ","))
 
-    # Preparamos una copia visual para la tabla web con los números formateados
+    # Preparamos una copia visual para la tabla web
     df_display = df_filtrado.copy()
     df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt3)
     df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt3)
@@ -118,25 +126,25 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF en A4 vertical con 7 columnas optimizadas (Suma 188mm)
+    # Función para generar el PDF en A4 vertical con 8 columnas optimizadas
     def generar_pdf_bytes(dataframe_original):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", 'B', 14)
-        pdf.cell(190, 10, txt="Reporte de Producción", ln=True, align='C')
+        pdf.cell(190, 10, txt="Reporte de Producción y Calidad", ln=True, align='C')
         pdf.ln(5)
         
-        pdf.set_font("Arial", 'B', 7)
-        # Anchos de columnas ajustados para las 7 columnas dentro de la hoja A4 vertical
-        # [Fecha, Lote, Producto, Litros Procesados, Producto Terminado, PNC, Ratio]
-        anchos = [20, 26, 38, 28, 28, 20, 28]
+        pdf.set_font("Arial", 'B', 6.5)
+        # 8 Columnas distribuidas en 190 mm de ancho útil:
+        # [Fecha, Lote, Producto, Litros, Terminado, PNC, % PNC, Ratio]
+        anchos = [18, 24, 36, 26, 26, 18, 18, 24]
         columnas = dataframe_original.columns.tolist()
         
         for i in range(len(columnas)):
             pdf.cell(anchos[i], 8, columnas[i], border=1, align='C')
         pdf.ln()
         
-        pdf.set_font("Arial", '', 7)
+        pdf.set_font("Arial", '', 6.5)
         for index, row in dataframe_original.iterrows():
             pdf.cell(anchos[0], 7, row['Fecha'].strftime('%d/%m/%Y'), border=1, align='C')
             pdf.cell(anchos[1], 7, str(row['Lote']), border=1, align='C')
@@ -144,7 +152,8 @@ try:
             pdf.cell(anchos[3], 7, fmt3(row['Litros Procesados']), border=1, align='R')
             pdf.cell(anchos[4], 7, fmt3(row['Producto Terminado']), border=1, align='R')
             pdf.cell(anchos[5], 7, fmt3(row['PNC']), border=1, align='R')
-            pdf.cell(anchos[6], 7, row['Ratio de Conversión (%)'], border=1, align='C')
+            pdf.cell(anchos[6], 7, row['% PNC'], border=1, align='C')
+            pdf.cell(anchos[7], 7, row['Ratio de Conversión (%)'], border=1, align='C')
             pdf.ln()
             
         pdf_output = pdf.output(dest='S')
@@ -159,7 +168,7 @@ try:
         st.download_button(
             label="📥 Descargar Reporte en PDF",
             data=pdf_bytes,
-            file_name="Reporte_Produccion.pdf",
+            file_name="Reporte_Produccion_Calidad.pdf",
             mime="application/pdf"
         )
     else:
