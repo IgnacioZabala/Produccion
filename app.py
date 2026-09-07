@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Reporte de Producción", page_icon="🏭", layout="wide")
 st.title("Generador de Reportes de Producción")
 
-# ID de Google Drive (Reemplazá con tu ID real si hace falta)
+# ID de Google Drive
 ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
@@ -89,7 +89,7 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF en A4 vertical y ancho ajustado (190mm total)
+    # Función para generar el PDF en A4 vertical con anchos optimizados
     def generar_pdf_bytes(dataframe_original):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
@@ -98,8 +98,8 @@ try:
         pdf.ln(5)
         
         pdf.set_font("Arial", 'B', 8)
-        # Anchos exactos que suman 190mm (ancho útil de hoja A4 vertical con márgenes de 10mm)
-        anchos = [25, 15, 40, 40, 25, 45]
+        # Anchos ajustados: Lote ahora mide 32mm para albergar códigos largos sin desbordarse
+        anchos = [24, 32, 35, 35, 26, 38]
         columnas = dataframe_original.columns.tolist()
         
         for i in range(len(columnas)):
@@ -121,7 +121,7 @@ try:
             return pdf_output.encode('latin1')
         return pdf_output
 
-    # Botón de Descarga Directa (Un solo botón)
+    # Botón de Descarga Directa
     st.subheader("📥 Descargar Reporte")
     if len(df_filtrado) > 0:
         pdf_bytes = generar_pdf_bytes(df_filtrado)
