@@ -10,7 +10,7 @@ st.title("Reporte de producción")
 ID_DEL_ARCHIVO = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf" 
 URL_DRIVE = f"https://drive.google.com/uc?id={ID_DEL_ARCHIVO}"
 
-# Función para formatear números con 2 decimales: 1.234.567,89
+# Función para formatear números con punto para miles y coma para decimales (2 decimales)
 def fmt2(val):
     try:
         return f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -146,7 +146,7 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF con los ajustes solicitados
+    # Función para generar el PDF con formato numérico correcto (miles con . y decimales con ,)
     def generar_pdf_bytes(dataframe_original):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
@@ -156,7 +156,7 @@ try:
         pdf.cell(190, 7, txt="Reporte de producción", ln=True, align='C')
         pdf.ln(3)
         
-        # --- SECCIÓN DE RESUMEN (Sin "Ejecutivo") ---
+        # --- SECCIÓN DE RESUMEN ---
         pdf.set_font("Arial", 'B', 9)
         pdf.cell(190, 5, txt="Resumen", ln=True, align='L')
         
@@ -167,13 +167,16 @@ try:
         rat_pond = (tot_pro / tot_lit * 100) if tot_lit > 0 else 0
         pnc_glob = (tot_pn / tot_lit * 100) if tot_lit > 0 else 0
         
+        rat_pond_str = f"{rat_pond:.2f}%".replace(".", ",")
+        pnc_glob_str = f"{pnc_glob:.2f}%".replace(".", ",")
+        
         pdf.cell(95, 5, txt=f"Total Litros Procesados: {fmt2(tot_lit)}", ln=0)
-        pdf.cell(95, 5, txt=f"Ratio Ponderado: {rat_pond:.2f}%".replace(".", ","), ln=1)
+        pdf.cell(95, 5, txt=f"Ratio Ponderado: {rat_pond_str}", ln=1)
         pdf.cell(95, 5, txt=f"Total Producto Terminado: {fmt2(tot_pro)}", ln=0)
-        pdf.cell(95, 5, txt=f"Total PNC: {fmt2(tot_pn)} (% PNC Global: {pnc_glob:.2f}%)".replace(".", ","), ln=1)
+        pdf.cell(95, 5, txt=f"Total PNC: {fmt2(tot_pn)} (% PNC Global: {pnc_glob_str})", ln=1)
         pdf.ln(2)
         
-        # Desglose de cantidad por producto CON ratio de conversión y 2 decimales
+        # Desglose de cantidad por producto
         pdf.set_font("Arial", 'B', 9)
         pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
         pdf.set_font("Arial", '', 7.5)
@@ -181,7 +184,8 @@ try:
         prod_res = dataframe_original.groupby('Producto')[['Litros Procesados', 'Producto Terminado']].sum().reset_index()
         for idx, row in prod_res.iterrows():
             ratio_prod = (row['Producto Terminado'] / row['Litros Procesados'] * 100) if row['Litros Procesados'] > 0 else 0
-            txt_linea = f"- {row['Producto']}: Litros Proc. {fmt2(row['Litros Procesados'])} | Prod. Terminado: {fmt2(row['Producto Terminado'])} | Ratio: {ratio_prod:.2f}%".replace(".", ",")
+            ratio_prod_str = f"{ratio_prod:.2f}%".replace(".", ",")
+            txt_linea = f"- {row['Producto']}: Litros Proc. {fmt2(row['Litros Procesados'])} | Prod. Terminado: {fmt2(row['Producto Terminado'])} | Ratio: {ratio_prod_str}"
             pdf.cell(190, 4.5, txt=txt_linea, ln=True)
             
         pdf.ln(4)
