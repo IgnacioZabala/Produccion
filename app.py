@@ -115,7 +115,7 @@ try:
     pnc_promedio = (total_pnc / total_litros * 100) if total_litros > 0 else 0
 
     # Mostrar métricas rápidas en pantalla
-    st.subheader("📊 Resumen")
+    st.subheader("Resumen")
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Litros Procesados", fmt2(total_litros))
     col2.metric("Prod. Terminado", fmt2(total_prod))
@@ -124,7 +124,7 @@ try:
     col5.metric("% PNC Global", f"{pnc_promedio:.2f}%".replace(".", ","))
 
     # Resumen por producto en pantalla con ratio
-    st.subheader("📦 Cantidad por Producto")
+    st.subheader("Cantidad por Producto")
     resumen_prod = df_filtrado.groupby('Producto')[['Litros Procesados', 'Producto Terminado', 'PNC']].sum().reset_index()
     resumen_prod['Ratio de Conversión (%)'] = resumen_prod.apply(
         lambda x: f"{(x['Producto Terminado'] / x['Litros Procesados'] * 100):.2f}%".replace(".", ",") if x['Litros Procesados'] > 0 else "0,00%", 
@@ -137,7 +137,7 @@ try:
     st.dataframe(resumen_display, use_container_width=True)
 
     # Detalle de lotes en pantalla
-    st.subheader("📋 Detalle de Lotes")
+    st.subheader("Detalle de Lotes")
     df_display = df_filtrado.copy()
     df_display['Litros Procesados'] = df_display['Litros Procesados'].apply(fmt2)
     df_display['Producto Terminado'] = df_display['Producto Terminado'].apply(fmt2)
