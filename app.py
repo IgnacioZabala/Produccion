@@ -106,6 +106,17 @@ try:
 
     df_filtrado = df_filtrado[columnas_ordenadas]
 
+    # Diccionario para nombres de meses en español
+    meses_nombres = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 
+        5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 
+        9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
+    mes_str = meses_nombres.get(filtro_mes, "") if filtro_mes != "Todos" else ""
+    anio_str = str(filtro_anio) if filtro_anio != "Todos" else ""
+    titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
+
     # Totales y métricas globales
     total_litros = df_filtrado['Litros Procesados'].sum()
     total_prod = df_filtrado['Producto Terminado'].sum()
@@ -146,14 +157,14 @@ try:
 
     st.dataframe(df_display, use_container_width=True)
 
-    # Función para generar el PDF con formato numérico correcto (miles con . y decimales con ,)
-    def generar_pdf_bytes(dataframe_original):
+    # Función para generar el PDF con el título dinámico por mes y año
+    def generar_pdf_bytes(dataframe_original, titulo_dinamico):
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         
-        # Título principal
+        # Título principal dinámico
         pdf.set_font("Arial", 'B', 13)
-        pdf.cell(190, 7, txt="Reporte de producción", ln=True, align='C')
+        pdf.cell(190, 7, txt=titulo_dinamico, ln=True, align='C')
         pdf.ln(3)
         
         # --- SECCIÓN DE RESUMEN ---
@@ -176,7 +187,7 @@ try:
         pdf.cell(95, 5, txt=f"Total PNC: {fmt2(tot_pn)} (% PNC Global: {pnc_glob_str})", ln=1)
         pdf.ln(2)
         
-        # Desglose de cantidad por producto
+        # Desglose de cantidad por producto con su ratio
         pdf.set_font("Arial", 'B', 9)
         pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
         pdf.set_font("Arial", '', 7.5)
@@ -223,7 +234,7 @@ try:
     # Botón de Descarga Directa
     st.subheader("📥 Descargar Reporte")
     if len(df_filtrado) > 0:
-        pdf_bytes = generar_pdf_bytes(df_filtrado)
+        pdf_bytes = generar_pdf_bytes(df_filtrado, titulo_pdf)
         st.download_button(
             label="📥 Descargar Reporte en PDF",
             data=pdf_bytes,
