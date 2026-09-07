@@ -76,6 +76,13 @@ try:
         axis=1
     )
 
+    # ORDEN EXPLICITO DE COLUMNAS (Asegura que queden en el orden lógico correcto)
+    columnas_ordenadas = [
+        'Fecha', 'Lote', 'Producto', 'Litros Procesados', 
+        'Producto Terminado', 'PNC', '% PNC', 'Ratio de Conversión (%)'
+    ]
+    df = df[columnas_ordenadas + ['Año' if 'Año' in df else 'Fecha', 'Mes' if 'Mes' in df else 'Fecha', 'Grupo']] # Mantenemos temporales temporalmente
+
     # FILTROS LATERALES (Solo Año, Mes y Grupo)
     st.sidebar.header("Filtros de Búsqueda")
     
@@ -98,7 +105,8 @@ try:
     if filtro_grupo != "Todos":
         df_filtrado = df_filtrado[df_filtrado['Grupo'] == filtro_grupo]
 
-    df_filtrado = df_filtrado.drop(columns=['Año', 'Mes', 'Grupo'])
+    # Nos quedamos estrictamente con las 8 columnas finales ordenadas
+    df_filtrado = df_filtrado[columnas_ordenadas]
 
     # Totales y métricas globales
     total_litros = df_filtrado['Litros Procesados'].sum()
@@ -134,12 +142,11 @@ try:
         pdf.cell(190, 10, txt="Reporte de Producción y Calidad", ln=True, align='C')
         pdf.ln(4)
         
-        # Letra más chica (6pt) para que los títulos entren sin encimarse
         pdf.set_font("Arial", 'B', 6)
         
-        # Anchos exactos que suman 190 mm (ancho útil de hoja A4 vertical)
-        # Orden: Fecha, Lote, Producto, Litros Procesados, Producto Terminado, PNC, % PNC, Ratio de Conversión (%)
-        anchos = [18, 24, 38, 24, 24, 16, 16, 30]
+        # Anchos exactos que suman 190 mm (PNC achicado a 14mm, Producto ampliado a 40mm)
+        # Orden: Fecha, Lote, Producto, Litros, Terminado, PNC, % PNC, Ratio
+        anchos = [18, 24, 40, 24, 24, 14, 16, 30]
         columnas = dataframe_original.columns.tolist()
         
         for i in range(len(columnas)):
