@@ -225,7 +225,7 @@ try:
     tab_interno, tab_gerencia = st.tabs(["🔒 Vista Operativa (Interna)", "📊 Vista Resumen (Gerencia)"])
 
     with tab_interno:
-        st.markdown("### 📈 Indicadores Principales")
+        st.markdown("### 📈 Indicadores")
         c1, c2, c3 = st.columns(3)
         c1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
         c2.metric("Litros Procesados", fmt2(total_litros_proc))
@@ -249,7 +249,7 @@ try:
             st.info("No hay lotes en el período seleccionado.")
 
     with tab_gerencia:
-        st.markdown("### 📈 Indicadores Consolidados")
+        st.markdown("### 📈 Indicadores")
         g1, g2, g3 = st.columns(3)
         g1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
         g2.metric("Litros Procesados", fmt2(total_litros_proc))
