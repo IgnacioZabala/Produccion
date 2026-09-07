@@ -55,7 +55,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">🏭 Reporte de Producción y Recepción</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">Reporte de Producción y Recepción</h1>', unsafe_allow_html=True)
 
 # ==========================================
 # CONFIGURACIÓN DE IDs DE GOOGLE DRIVE
