@@ -217,7 +217,7 @@ try:
         else:
             anio_str = "2026"
 
-    titulo_pdf = f"Reporte de produccion {mes_str} {anio_str}".strip()
+    titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
 
     # ==========================================
     # INTERFAZ PRINCIPAL
