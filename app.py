@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 import os
+import traceback
 
-st.set_page_config(page_title="Reporte de Producción y Calidad", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Reporte de Producción y Calidad", page_icon="🏭", layout="wide", initial_sidebar_state="expanded")
 
 # ==========================================
 # ESTILOS CSS PROFESIONALES (UI/UX)
@@ -11,9 +12,6 @@ st.set_page_config(page_title="Reporte de Producción y Calidad", page_icon="�
 st.markdown("""
     <style>
         .stApp { background-color: #f4f6f9; }
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
         div[data-testid="metric-container"] {
             background-color: #ffffff;
             border: 1px solid #e0e4e8;
@@ -32,15 +30,6 @@ st.markdown("""
             padding-bottom: 10px;
             border-bottom: 2px solid #e2e8f0;
             margin-bottom: 20px;
-        }
-        .stButton>button {
-            border-radius: 6px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-        [data-testid="stSidebar"] {
-            background-color: #ffffff;
-            border-right: 1px solid #e2e8f0;
         }
         thead tr th {
             background-color: #f8fafc !important;
@@ -89,18 +78,13 @@ try:
         # 1. Leer Producción
         raw_prod = pd.read_excel(URL_PRODUCCION, skiprows=6)
         df_prod = pd.DataFrame()
-        df_prod['Fecha'] = raw_prod.iloc[:, 0]
+        df_prod['Fecha'] = pd.to_datetime(raw_prod.iloc[:, 0], dayfirst=True, errors='coerce')
         df_prod['Lote'] = raw_prod.iloc[:, 1]
-        df_prod['Litros Procesados'] = raw_prod.iloc[:, 3]
-        df_prod['Producto Terminado'] = raw_prod.iloc[:, 5]
-        df_prod['PNC'] = raw_prod.iloc[:, 6]
+        df_prod['Litros Procesados'] = pd.to_numeric(raw_prod.iloc[:, 3], errors='coerce').fillna(0)
+        df_prod['Producto Terminado'] = pd.to_numeric(raw_prod.iloc[:, 5], errors='coerce').fillna(0)
+        df_prod['PNC'] = pd.to_numeric(raw_prod.iloc[:, 6], errors='coerce').fillna(0)
         
         df_prod = df_prod.dropna(subset=['Fecha'])
-        df_prod['Fecha'] = pd.to_datetime(df_prod['Fecha'], dayfirst=True, errors='coerce')
-        df_prod = df_prod.dropna(subset=['Fecha'])
-
-        for col in ["Litros Procesados", "Producto Terminado", "PNC"]:
-            df_prod[col] = pd.to_numeric(df_prod[col], errors='coerce').fillna(0)
 
         if len(df_prod) > 0:
             df_prod['Producto'], df_prod['Grupo'] = zip(*df_prod['Lote'].astype(str).apply(procesar_lote))
@@ -108,35 +92,39 @@ try:
             df_prod['Producto'] = []
             df_prod['Grupo'] = []
 
+        # Asegurar tipo datetime antes del .dt
+        df_prod['Fecha'] = pd.to_datetime(df_prod['Fecha'])
         df_prod['Año'] = df_prod['Fecha'].dt.year
         df_prod['Mes'] = df_prod['Fecha'].dt.month
 
         # 2A. Leer Recibo de Leche Interno
         raw_recibo_int = pd.read_excel(URL_RECIBO_INTERNO)
         df_recibo_int = pd.DataFrame()
-        df_recibo_int['Fecha_Raw'] = raw_recibo_int.iloc[:, 1] 
+        df_recibo_int['Fecha'] = pd.to_datetime(raw_recibo_int.iloc[:, 1], dayfirst=True, errors='coerce')
         df_recibo_int['Litros Ingresados'] = pd.to_numeric(raw_recibo_int.iloc[:, 5], errors='coerce').fillna(0)
-        df_recibo_int['Fecha'] = pd.to_datetime(df_recibo_int['Fecha_Raw'], dayfirst=True, errors='coerce')
         df_recibo_int = df_recibo_int.dropna(subset=['Fecha'])
         
         # 2B. Leer Recibo de Leche Mastellone (Col D=3, Col Q=16)
+        df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados'])
         try:
             raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name="Rec cisterna")
-            df_recibo_mast = pd.DataFrame()
-            df_recibo_mast['Fecha_Raw'] = raw_recibo_mast.iloc[:, 3] 
-            df_recibo_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast.iloc[:, 16], errors='coerce').fillna(0)
-            df_recibo_mast['Fecha'] = pd.to_datetime(df_recibo_mast['Fecha_Raw'], errors='coerce')
-            df_recibo_mast = df_recibo_mast.dropna(subset=['Fecha'])
+            temp_mast = pd.DataFrame()
+            temp_mast['Fecha'] = pd.to_datetime(raw_recibo_mast.iloc[:, 3], errors='coerce')
+            temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast.iloc[:, 16], errors='coerce').fillna(0)
+            df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
         except Exception as e_mast:
-            st.sidebar.warning("No se pudo cargar el recibo de Mastellone, se calculará solo con el interno.")
-            df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados'])
+            st.sidebar.warning(f"No se pudo cargar el recibo de Mastellone, se calculará solo con el interno. (Falta ID o permisos)")
 
         # Unir ambos recibos
-        df_recibo_total = pd.concat([df_recibo_int, df_recibo_mast], ignore_index=True)
-        df_recibo_total['Año'] = df_recibo_total['Fecha'].dt.year
-        df_recibo_total['Mes'] = df_recibo_total['Fecha'].dt.month
-
-        recibo_mensual = df_recibo_total.groupby(['Año', 'Mes'])['Litros Ingresados'].sum().reset_index()
+        if not df_recibo_int.empty or not df_recibo_mast.empty:
+            df_recibo_total = pd.concat([df_recibo_int, df_recibo_mast], ignore_index=True)
+            # Volver a forzar datetime por si el concat mezcló tipos
+            df_recibo_total['Fecha'] = pd.to_datetime(df_recibo_total['Fecha'])
+            df_recibo_total['Año'] = df_recibo_total['Fecha'].dt.year
+            df_recibo_total['Mes'] = df_recibo_total['Fecha'].dt.month
+            recibo_mensual = df_recibo_total.groupby(['Año', 'Mes'])['Litros Ingresados'].sum().reset_index()
+        else:
+            recibo_mensual = pd.DataFrame(columns=['Año', 'Mes', 'Litros Ingresados'])
 
     # ==========================================
     # BARRA LATERAL (FILTROS)
@@ -147,10 +135,9 @@ try:
     opciones_mes = ["Todos"] + (sorted(df_prod['Mes'].unique().tolist()) if len(df_prod) > 0 else [])
     opciones_grupo = ["Todos", "Coopagro", "Mastellone"]
 
-    with st.sidebar.container():
-        filtro_anio = st.selectbox("📅 Seleccionar Año", opciones_anio)
-        filtro_mes = st.selectbox("📆 Seleccionar Mes", opciones_mes)
-        filtro_grupo = st.selectbox("🏢 Seleccionar Grupo", opciones_grupo)
+    filtro_anio = st.sidebar.selectbox("📅 Seleccionar Año", opciones_anio)
+    filtro_mes = st.sidebar.selectbox("📆 Seleccionar Mes", opciones_mes)
+    filtro_grupo = st.sidebar.selectbox("🏢 Seleccionar Grupo", opciones_grupo)
         
     st.sidebar.markdown("---")
 
@@ -199,11 +186,14 @@ try:
     else:
         df_gerencia = pd.DataFrame(columns=['Fecha', 'Lote', 'Producto', 'Litros Procesados', 'Producto Terminado', 'Ratio de Conversión (%)'])
 
-    # Calcular ingresos totales sumados (Interno + Mastellone)
+    # Calcular ingresos totales sumados
     df_recibo_filtrado = recibo_mensual.copy()
-    if filtro_anio != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Año'] == filtro_anio]
-    if filtro_mes != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Mes'] == filtro_mes]
-    total_litros_ingresados = df_recibo_filtrado['Litros Ingresados'].sum()
+    if not df_recibo_filtrado.empty:
+        if filtro_anio != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Año'] == filtro_anio]
+        if filtro_mes != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Mes'] == filtro_mes]
+        total_litros_ingresados = df_recibo_filtrado['Litros Ingresados'].sum()
+    else:
+        total_litros_ingresados = 0
 
     total_litros_proc = df_filtrado['Litros Procesados'].sum() if len(df_filtrado) > 0 else 0
     total_prod = df_filtrado['Producto Terminado'].sum() if len(df_filtrado) > 0 else 0
@@ -446,3 +436,5 @@ try:
             
 except Exception as e:
     st.error(f"Hubo un error al leer los archivos de Drive o procesar los datos: {e}")
+    with st.expander("Detalles del Error Técnico"):
+        st.code(traceback.format_exc())
