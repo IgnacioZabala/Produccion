@@ -3,12 +3,7 @@ import pandas as pd
 from fpdf import FPDF
 import os
 
-st.set_page_config(
-    page_title="Reporte de Producción y Calidad", 
-    page_icon="🏭", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Reporte de Producción y Calidad", page_icon="🏭", layout="wide")
 
 # ==========================================
 # ESTILOS CSS PROFESIONALES (UI/UX)
@@ -18,8 +13,7 @@ st.markdown("""
         .stApp { background-color: #f4f6f9; }
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        /* La línea de 'header' fue eliminada para no ocultar el botón del panel lateral */
-
+        header {visibility: hidden;}
         div[data-testid="metric-container"] {
             background-color: #ffffff;
             border: 1px solid #e0e4e8;
@@ -32,7 +26,6 @@ st.markdown("""
             transform: translateY(-2px);
             box-shadow: 0 6px 10px rgba(0, 0, 0, 0.08);
         }
-
         .main-header {
             color: #1e293b;
             font-weight: 700;
@@ -40,18 +33,15 @@ st.markdown("""
             border-bottom: 2px solid #e2e8f0;
             margin-bottom: 20px;
         }
-        
         .stButton>button {
             border-radius: 6px;
             font-weight: 600;
             transition: all 0.2s ease;
         }
-        
         [data-testid="stSidebar"] {
             background-color: #ffffff;
             border-right: 1px solid #e2e8f0;
         }
-        
         thead tr th {
             background-color: #f8fafc !important;
             color: #475569 !important;
@@ -60,16 +50,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">Reporte de Producción y Recepción</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">🏭 Reporte de Producción y Recepción</h1>', unsafe_allow_html=True)
 
 # ==========================================
 # CONFIGURACIÓN DE IDs DE GOOGLE DRIVE
 # ==========================================
 ID_PRODUCCION = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf"
-ID_RECIBO = "16Uh0EwP8tyW79TfJlvcjE8li5Lc6RSLj"
+ID_RECIBO_INTERNO = "16Uh0EwP8tyW79TfJlvcjE8li5Lc6RSLj"
+ID_RECIBO_MASTELLONE = "1sOBujAyTijDtNze0m9q5ZU2-7xWfc584"
 
 URL_PRODUCCION = f"https://drive.google.com/uc?id={ID_PRODUCCION}"
-URL_RECIBO = f"https://drive.google.com/uc?id={ID_RECIBO}"
+URL_RECIBO_INTERNO = f"https://drive.google.com/uc?id={ID_RECIBO_INTERNO}"
+URL_RECIBO_MASTELLONE = f"https://drive.google.com/uc?id={ID_RECIBO_MASTELLONE}"
 
 def fmt2(val):
     try:
@@ -119,19 +111,32 @@ try:
         df_prod['Año'] = df_prod['Fecha'].dt.year
         df_prod['Mes'] = df_prod['Fecha'].dt.month
 
-        # 2. Leer Recibo de Leche
-        raw_recibo = pd.read_excel(URL_RECIBO)
-        df_recibo = pd.DataFrame()
-        df_recibo['Fecha_Raw'] = raw_recibo.iloc[:, 1] 
-        df_recibo['Litros Ingresados'] = pd.to_numeric(raw_recibo.iloc[:, 5], errors='coerce').fillna(0)
+        # 2A. Leer Recibo de Leche Interno
+        raw_recibo_int = pd.read_excel(URL_RECIBO_INTERNO)
+        df_recibo_int = pd.DataFrame()
+        df_recibo_int['Fecha_Raw'] = raw_recibo_int.iloc[:, 1] 
+        df_recibo_int['Litros Ingresados'] = pd.to_numeric(raw_recibo_int.iloc[:, 5], errors='coerce').fillna(0)
+        df_recibo_int['Fecha'] = pd.to_datetime(df_recibo_int['Fecha_Raw'], dayfirst=True, errors='coerce')
+        df_recibo_int = df_recibo_int.dropna(subset=['Fecha'])
         
-        df_recibo['Fecha'] = pd.to_datetime(df_recibo['Fecha_Raw'], dayfirst=True, errors='coerce')
-        df_recibo = df_recibo.dropna(subset=['Fecha'])
-        
-        df_recibo['Año'] = df_recibo['Fecha'].dt.year
-        df_recibo['Mes'] = df_recibo['Fecha'].dt.month
+        # 2B. Leer Recibo de Leche Mastellone (Col D=3, Col Q=16)
+        try:
+            raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name="Rec cisterna")
+            df_recibo_mast = pd.DataFrame()
+            df_recibo_mast['Fecha_Raw'] = raw_recibo_mast.iloc[:, 3] 
+            df_recibo_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast.iloc[:, 16], errors='coerce').fillna(0)
+            df_recibo_mast['Fecha'] = pd.to_datetime(df_recibo_mast['Fecha_Raw'], errors='coerce')
+            df_recibo_mast = df_recibo_mast.dropna(subset=['Fecha'])
+        except Exception as e_mast:
+            st.sidebar.warning("No se pudo cargar el recibo de Mastellone, se calculará solo con el interno.")
+            df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados'])
 
-        recibo_mensual = df_recibo.groupby(['Año', 'Mes'])['Litros Ingresados'].sum().reset_index()
+        # Unir ambos recibos
+        df_recibo_total = pd.concat([df_recibo_int, df_recibo_mast], ignore_index=True)
+        df_recibo_total['Año'] = df_recibo_total['Fecha'].dt.year
+        df_recibo_total['Mes'] = df_recibo_total['Fecha'].dt.month
+
+        recibo_mensual = df_recibo_total.groupby(['Año', 'Mes'])['Litros Ingresados'].sum().reset_index()
 
     # ==========================================
     # BARRA LATERAL (FILTROS)
@@ -147,6 +152,7 @@ try:
         filtro_mes = st.selectbox("📆 Seleccionar Mes", opciones_mes)
         filtro_grupo = st.selectbox("🏢 Seleccionar Grupo", opciones_grupo)
         
+    st.sidebar.markdown("---")
 
     # ==========================================
     # PROCESAMIENTO DE DATOS FILTRADOS
@@ -193,6 +199,7 @@ try:
     else:
         df_gerencia = pd.DataFrame(columns=['Fecha', 'Lote', 'Producto', 'Litros Procesados', 'Producto Terminado', 'Ratio de Conversión (%)'])
 
+    # Calcular ingresos totales sumados (Interno + Mastellone)
     df_recibo_filtrado = recibo_mensual.copy()
     if filtro_anio != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Año'] == filtro_anio]
     if filtro_mes != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Mes'] == filtro_mes]
@@ -222,7 +229,7 @@ try:
         else:
             anio_str = "2026"
 
-    titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
+    titulo_pdf = f"Reporte de produccion {mes_str} {anio_str}".strip()
 
     # ==========================================
     # INTERFAZ PRINCIPAL
@@ -230,10 +237,10 @@ try:
     tab_interno, tab_gerencia = st.tabs(["🔒 Vista Operativa (Interna)", "📊 Vista Resumen (Gerencia)"])
 
     with tab_interno:
-        st.markdown("### 📈 Indicadores")
+        st.markdown("### 📈 Indicadores Principales")
         c1, c2, c3 = st.columns(3)
-        c1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
-        c2.metric("Litros Procesados", fmt2(total_litros_proc))
+        c1.metric("Total Lts Ingresados", fmt2(total_litros_ingresados))
+        c2.metric("Total Lts Procesados", fmt2(total_litros_proc))
         c3.metric("Prod. Terminado", fmt2(total_prod))
         
         c4, c5, c6 = st.columns(3)
@@ -254,10 +261,10 @@ try:
             st.info("No hay lotes en el período seleccionado.")
 
     with tab_gerencia:
-        st.markdown("### 📈 Indicadores")
+        st.markdown("### 📈 Indicadores Consolidados")
         g1, g2, g3 = st.columns(3)
-        g1.metric("Litros Ingresados", fmt2(total_litros_ingresados))
-        g2.metric("Litros Procesados", fmt2(total_litros_proc))
+        g1.metric("Total Lts Ingresados", fmt2(total_litros_ingresados))
+        g2.metric("Total Lts Procesados", fmt2(total_litros_proc))
         g3.metric("Total Producto Terminado", fmt2(total_prod_gerencia))
         
         g4, g5, g6 = st.columns(3)
@@ -303,7 +310,6 @@ try:
         pdf.cell(95, 5, txt=f"Total PNC: {fmt2(tot_pn)} (% PNC Global: {pnc_glob:.2f}%)".replace(".", ","), ln=1)
         pdf.ln(5)
         
-        # AGREGADO: Cantidad por Producto Intermedio
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
         pdf.set_font("Arial", '', 8)
@@ -317,7 +323,6 @@ try:
             
         pdf.ln(5)
         
-        # Detalle de Lotes
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
         pdf.ln(2)
@@ -365,7 +370,6 @@ try:
         pdf.cell(95, 5, txt=f"Total Producto Terminado: {fmt2(tot_pro_ger)}", ln=1)
         pdf.ln(5)
 
-        # AGREGADO: Cantidad por Producto Intermedio (Gerencia)
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Cantidad por Producto:", ln=True, align='L')
         pdf.set_font("Arial", '', 8)
@@ -379,7 +383,6 @@ try:
             
         pdf.ln(5)
         
-        # Detalle de Lotes
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(190, 5, txt="Detalle de Lotes", ln=True, align='L')
         pdf.ln(2)
