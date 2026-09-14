@@ -203,7 +203,13 @@ try:
         else:
             anio_str = "2026"
 
-    titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
+    # --- TÍTULO DINÁMICO SEGÚN GRUPO SELECCIONADO ---
+    if filtro_grupo == "Mastellone":
+        titulo_pdf = f"Reporte de producción Mastellone {mes_str} {anio_str}".strip()
+    elif filtro_grupo == "Coopagro":
+        titulo_pdf = f"Reporte de producción Coopagro {mes_str} {anio_str}".strip()
+    else:
+        titulo_pdf = f"Reporte de producción {mes_str} {anio_str}".strip()
 
     # ==========================================
     # INTERFAZ PRINCIPAL (VISTA ÚNICA)
@@ -310,7 +316,7 @@ try:
         st.download_button(
             label="📄 Descargar Reporte en PDF",
             data=pdf_bytes,
-            file_name="Reporte_Produccion.pdf",
+            file_name=f"{titulo_pdf.replace(' ', '_')}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
