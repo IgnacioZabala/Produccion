@@ -103,24 +103,26 @@ try:
         df_recibo_int['Litros Ingresados'] = pd.to_numeric(raw_recibo_int.iloc[:, 5], errors='coerce').fillna(0)
         df_recibo_int = df_recibo_int.dropna(subset=['Fecha'])
         
-        # 2B. Leer Recibo de Leche Mastellone (Lectura inteligente por letras de columna D y Q)
+        # 2B. Leer Recibo de Leche Mastellone (Lectura robusta con detección automática de solapa)
         df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados'])
         
         if ID_RECIBO_MASTELLONE != "AQUI_TU_ID_MASTELLONE":
             try:
-                # usecols="D,Q" fuerza a Pandas a mirar solo esas letras, ignorando columnas ocultas o desplazadas.
-                raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name="Rec cisterna", usecols="D,Q", names=['Fecha_Raw', 'Litros_Raw'])
+                xls_mast = pd.ExcelFile(URL_RECIBO_MASTELLONE)
+                # Buscamos la solapa que contenga "cisterna" o "recibo", por defecto usamos la primera si no la encuentra
+                nombre_solapa = next((s for s in xls_mast.sheet_names if 'cisterna' in s.lower() or 'recibo' in s.lower()), xls_mast.sheet_names[0])
+                
+                raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name=nombre_solapa, usecols="D,Q", names=['Fecha_Raw', 'Litros_Raw'])
                 temp_mast = pd.DataFrame()
                 
-                # dayfirst=True garantiza que lea 21/09/2025 correctamente
                 temp_mast['Fecha'] = pd.to_datetime(raw_recibo_mast['Fecha_Raw'], dayfirst=True, errors='coerce')
                 temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast['Litros_Raw'], errors='coerce').fillna(0)
                 
                 df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
             except Exception as e_mast:
-                st.sidebar.warning(f"Error técnico cargando Mastellone: Revisar ID o permisos de acceso.")
+                st.sidebar.warning(f"Aviso Mastellone: No se pudo cargar automáticamente la solapa. Detalle: {e_mast}")
         else:
-            st.sidebar.warning("⚠️ Falta cargar el ID de Google Drive de Mastellone en el código (Línea 47).")
+            st.sidebar.warning("⚠️ Falta cargar el ID de Google Drive de Mastellone en el código.")
 
         # Unir ambos recibos (Interno + Mastellone)
         if not df_recibo_int.empty or not df_recibo_mast.empty:
