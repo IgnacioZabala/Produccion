@@ -114,7 +114,14 @@ try:
             raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name=nombre_solapa, skiprows=4)
             temp_mast = pd.DataFrame()
             
-            temp_mast['Fecha'] = pd.to_datetime(raw_recibo_mast.iloc[:, 3], dayfirst=True, errors='coerce')
+            # Conversión robusta de fecha para evitar pérdida de registros
+            fechas_raw = raw_recibo_mast.iloc[:, 3]
+            temp_mast['Fecha'] = pd.to_datetime(fechas_raw, dayfirst=True, errors='coerce')
+            # Si hay fechas numéricas de excel o formatos extraños, intentamos un segundo parseo
+            mask_nat = temp_mast['Fecha'].isna() & fechas_raw.notna()
+            if mask_nat.any():
+                temp_mast.loc[mask_nat, 'Fecha'] = pd.to_datetime(pd.to_numeric(fechas_raw[mask_nat], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
+
             temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast.iloc[:, 16], errors='coerce').fillna(0)
             
             df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
@@ -211,7 +218,7 @@ try:
         else:
             anio_str = "2026"
 
-    # Título dinámico según grupo seleccionado para el PDF y la interfaz
+    # Título dinámico para el PDF según grupo seleccionado
     if filtro_grupo == "Mastellone":
         prefijo_titulo = "Reporte de produccion Mastellone"
     elif filtro_grupo == "Coopagro":
