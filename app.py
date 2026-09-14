@@ -102,16 +102,18 @@ try:
         df_recibo_int['Fecha'] = pd.to_datetime(raw_recibo_int.iloc[:, 1], dayfirst=True, errors='coerce')
         df_recibo_int['Litros Ingresados'] = pd.to_numeric(raw_recibo_int.iloc[:, 5], errors='coerce').fillna(0)
         df_recibo_int = df_recibo_int.dropna(subset=['Fecha'])
+        df_recibo_int['Año'] = df_recibo_int['Fecha'].dt.year
+        df_recibo_int['Mes'] = df_recibo_int['Fecha'].dt.month
         
-        # 2B. Leer Recibo de Leche Mastellone (Lectura robusta con detección automática de solapa)
-        df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados'])
+        # 2B. Leer Recibo de Leche Mastellone (Columna D para Fecha, Columna Q para Litros)
+        df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados', 'Año', 'Mes'])
         
         if ID_RECIBO_MASTELLONE != "AQUI_TU_ID_MASTELLONE":
             try:
                 xls_mast = pd.ExcelFile(URL_RECIBO_MASTELLONE)
-                # Buscamos la solapa que contenga "cisterna" o "recibo", por defecto usamos la primera si no la encuentra
                 nombre_solapa = next((s for s in xls_mast.sheet_names if 'cisterna' in s.lower() or 'recibo' in s.lower()), xls_mast.sheet_names[0])
                 
+                # usecols="D,Q" trae estrictamente la columna D y la columna Q
                 raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name=nombre_solapa, usecols="D,Q", names=['Fecha_Raw', 'Litros_Raw'])
                 temp_mast = pd.DataFrame()
                 
@@ -119,20 +121,12 @@ try:
                 temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast['Litros_Raw'], errors='coerce').fillna(0)
                 
                 df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
+                df_recibo_mast['Año'] = df_recibo_mast['Fecha'].dt.year
+                df_recibo_mast['Mes'] = df_recibo_mast['Fecha'].dt.month
             except Exception as e_mast:
-                st.sidebar.warning(f"Aviso Mastellone: No se pudo cargar automáticamente la solapa. Detalle: {e_mast}")
+                st.sidebar.warning(f"Aviso Mastellone: No se pudo cargar automáticamente. Detalle: {e_mast}")
         else:
             st.sidebar.warning("⚠️ Falta cargar el ID de Google Drive de Mastellone en el código.")
-
-        # Unir ambos recibos (Interno + Mastellone)
-        if not df_recibo_int.empty or not df_recibo_mast.empty:
-            df_recibo_total = pd.concat([df_recibo_int, df_recibo_mast], ignore_index=True)
-            df_recibo_total['Fecha'] = pd.to_datetime(df_recibo_total['Fecha'])
-            df_recibo_total['Año'] = df_recibo_total['Fecha'].dt.year
-            df_recibo_total['Mes'] = df_recibo_total['Fecha'].dt.month
-            recibo_mensual = df_recibo_total.groupby(['Año', 'Mes'])['Litros Ingresados'].sum().reset_index()
-        else:
-            recibo_mensual = pd.DataFrame(columns=['Año', 'Mes', 'Litros Ingresados'])
 
     # ==========================================
     # BARRA LATERAL (FILTROS)
@@ -194,14 +188,26 @@ try:
     else:
         df_gerencia = pd.DataFrame(columns=['Fecha', 'Lote', 'Producto', 'Litros Procesados', 'Producto Terminado', 'Ratio de Conversión (%)'])
 
-    # Calcular ingresos totales sumados
-    df_recibo_filtrado = recibo_mensual.copy()
-    if not df_recibo_filtrado.empty:
-        if filtro_anio != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Año'] == filtro_anio]
-        if filtro_mes != "Todos": df_recibo_filtrado = df_recibo_filtrado[df_recibo_filtrado['Mes'] == filtro_mes]
-        total_litros_ingresados = df_recibo_filtrado['Litros Ingresados'].sum()
-    else:
-        total_litros_ingresados = 0
+    # --- CÁLCULO INTELIGENTE DE LITROS INGRESADOS SEGÚN GRUPO SELECCIONADO ---
+    df_int_filt = df_recibo_int.copy()
+    df_mast_filt = df_recibo_mast.copy()
+
+    if filtro_anio != "Todos":
+        df_int_filt = df_int_filt[df_int_filt['Año'] == filtro_anio]
+        df_mast_filt = df_mast_filt[df_mast_filt['Año'] == filtro_anio]
+    if filtro_mes != "Todos":
+        df_int_filt = df_int_filt[df_int_filt['Mes'] == filtro_mes]
+        df_mast_filt = df_mast_filt[df_mast_filt['Mes'] == filtro_mes]
+
+    litros_int_sum = df_int_filt['Litros Ingresados'].sum()
+    litros_mast_sum = df_mast_filt['Litros Ingresados'].sum()
+
+    if filtro_grupo == "Mastellone":
+        total_litros_ingresados = litros_mast_sum
+    elif filtro_grupo == "Coopagro":
+        total_litros_ingresados = litros_int_sum
+    else: # "Todos"
+        total_litros_ingresados = litros_int_sum + litros_mast_sum
 
     total_litros_proc = df_filtrado['Litros Procesados'].sum() if len(df_filtrado) > 0 else 0
     total_prod = df_filtrado['Producto Terminado'].sum() if len(df_filtrado) > 0 else 0
