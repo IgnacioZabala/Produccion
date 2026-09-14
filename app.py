@@ -48,9 +48,9 @@ ID_PRODUCCION = "1wuIpzYmVuflX_pWoPt4Pz9olWF4LLKOf"
 ID_RECIBO_INTERNO = "16Uh0EwP8tyW79TfJlvcjE8li5Lc6RSLj"
 ID_RECIBO_MASTELLONE = "1sOBujAyTijDtNze0m9q5ZU2-7xWfc584"
 
-URL_PRODUCCION = f"https://drive.google.com/uc?id={ID_PRODUCCION}"
-URL_RECIBO_INTERNO = f"https://drive.google.com/uc?id={ID_RECIBO_INTERNO}"
-URL_RECIBO_MASTELLONE = f"https://drive.google.com/uc?id={ID_RECIBO_MASTELLONE}"
+URL_PRODUCCION = f"https://drive.google.com/uc?export=download&id={ID_PRODUCCION}"
+URL_RECIBO_INTERNO = f"https://drive.google.com/uc?export=download&id={ID_RECIBO_INTERNO}"
+URL_RECIBO_MASTELLONE = f"https://drive.google.com/uc?export=download&id={ID_RECIBO_MASTELLONE}"
 
 def fmt2(val):
     try:
@@ -92,7 +92,6 @@ try:
             df_prod['Producto'] = []
             df_prod['Grupo'] = []
 
-        # Asegurar tipo datetime antes del .dt
         df_prod['Fecha'] = pd.to_datetime(df_prod['Fecha'])
         df_prod['Año'] = df_prod['Fecha'].dt.year
         df_prod['Mes'] = df_prod['Fecha'].dt.month
@@ -104,21 +103,28 @@ try:
         df_recibo_int['Litros Ingresados'] = pd.to_numeric(raw_recibo_int.iloc[:, 5], errors='coerce').fillna(0)
         df_recibo_int = df_recibo_int.dropna(subset=['Fecha'])
         
-        # 2B. Leer Recibo de Leche Mastellone (Col D=3, Col Q=16)
+        # 2B. Leer Recibo de Leche Mastellone (Lectura inteligente por letras de columna D y Q)
         df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados'])
-        try:
-            raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name="Rec cisterna")
-            temp_mast = pd.DataFrame()
-            temp_mast['Fecha'] = pd.to_datetime(raw_recibo_mast.iloc[:, 3], errors='coerce')
-            temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast.iloc[:, 16], errors='coerce').fillna(0)
-            df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
-        except Exception as e_mast:
-            st.sidebar.warning(f"No se pudo cargar el recibo de Mastellone, se calculará solo con el interno. (Falta ID o permisos)")
+        
+        if ID_RECIBO_MASTELLONE != "AQUI_TU_ID_MASTELLONE":
+            try:
+                # usecols="D,Q" fuerza a Pandas a mirar solo esas letras, ignorando columnas ocultas o desplazadas.
+                raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name="Rec cisterna", usecols="D,Q", names=['Fecha_Raw', 'Litros_Raw'])
+                temp_mast = pd.DataFrame()
+                
+                # dayfirst=True garantiza que lea 21/09/2025 correctamente
+                temp_mast['Fecha'] = pd.to_datetime(raw_recibo_mast['Fecha_Raw'], dayfirst=True, errors='coerce')
+                temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast['Litros_Raw'], errors='coerce').fillna(0)
+                
+                df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
+            except Exception as e_mast:
+                st.sidebar.warning(f"Error técnico cargando Mastellone: Revisar ID o permisos de acceso.")
+        else:
+            st.sidebar.warning("⚠️ Falta cargar el ID de Google Drive de Mastellone en el código (Línea 47).")
 
-        # Unir ambos recibos
+        # Unir ambos recibos (Interno + Mastellone)
         if not df_recibo_int.empty or not df_recibo_mast.empty:
             df_recibo_total = pd.concat([df_recibo_int, df_recibo_mast], ignore_index=True)
-            # Volver a forzar datetime por si el concat mezcló tipos
             df_recibo_total['Fecha'] = pd.to_datetime(df_recibo_total['Fecha'])
             df_recibo_total['Año'] = df_recibo_total['Fecha'].dt.year
             df_recibo_total['Mes'] = df_recibo_total['Fecha'].dt.month
@@ -436,5 +442,5 @@ try:
             
 except Exception as e:
     st.error(f"Hubo un error al leer los archivos de Drive o procesar los datos: {e}")
-    with st.expander("Detalles del Error Técnico"):
+    with st.expander("Ver detalles técnicos del error"):
         st.code(traceback.format_exc())
