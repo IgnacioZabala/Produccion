@@ -3,7 +3,12 @@ import pandas as pd
 from fpdf import FPDF
 import os
 
-st.set_page_config(page_title="Reporte de Producción y Calidad", page_icon="🏭", layout="wide")
+st.set_page_config(
+    page_title="Reporte de Producción y Calidad", 
+    page_icon="🏭", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # ==========================================
 # ESTILOS CSS PROFESIONALES (UI/UX)
@@ -13,7 +18,7 @@ st.markdown("""
         .stApp { background-color: #f4f6f9; }
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        header {visibility: hidden;}
+        /* La línea de 'header' fue eliminada para no ocultar el botón del panel lateral */
 
         div[data-testid="metric-container"] {
             background-color: #ffffff;
