@@ -105,25 +105,29 @@ try:
         df_recibo_int['Año'] = df_recibo_int['Fecha'].dt.year
         df_recibo_int['Mes'] = df_recibo_int['Fecha'].dt.month
         
-        # 2B. Leer Recibo de Leche Mastellone (Columna D [idx 3] para Fecha, Columna Q [idx 16] para Litros)
+        # 2B. Leer Recibo de Leche Mastellone (BLINDADO: Solo columnas D y Q)
         df_recibo_mast = pd.DataFrame(columns=['Fecha', 'Litros Ingresados', 'Año', 'Mes'])
         try:
             xls_mast = pd.ExcelFile(URL_RECIBO_MASTELLONE)
             nombre_solapa = next((s for s in xls_mast.sheet_names if 'cisterna' in s.lower() or 'recibo' in s.lower()), xls_mast.sheet_names[0])
             
-            raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name=nombre_solapa, skiprows=4)
+            # usecols="D,Q" trae EXCLUSIVAMENTE esas dos columnas, sin importar las filas combinadas o títulos.
+            raw_recibo_mast = pd.read_excel(URL_RECIBO_MASTELLONE, sheet_name=nombre_solapa, usecols="D,Q", header=None, names=['Fecha_Raw', 'Litros_Raw'])
+            
             temp_mast = pd.DataFrame()
             
-            # Conversión robusta de fecha para evitar pérdida de registros
-            fechas_raw = raw_recibo_mast.iloc[:, 3]
-            temp_mast['Fecha'] = pd.to_datetime(fechas_raw, dayfirst=True, errors='coerce')
-            # Si hay fechas numéricas de excel o formatos extraños, intentamos un segundo parseo
-            mask_nat = temp_mast['Fecha'].isna() & fechas_raw.notna()
-            if mask_nat.any():
-                temp_mast.loc[mask_nat, 'Fecha'] = pd.to_datetime(pd.to_numeric(fechas_raw[mask_nat], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
-
-            temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast.iloc[:, 16], errors='coerce').fillna(0)
+            # Convertimos la columna D a fecha de forma segura
+            temp_mast['Fecha'] = pd.to_datetime(raw_recibo_mast['Fecha_Raw'], dayfirst=True, errors='coerce')
             
+            # Recuperamos fechas que Excel pueda estar exportando como números de serie
+            mask_nat = temp_mast['Fecha'].isna() & raw_recibo_mast['Fecha_Raw'].notna()
+            if mask_nat.any():
+                temp_mast.loc[mask_nat, 'Fecha'] = pd.to_datetime(pd.to_numeric(raw_recibo_mast.loc[mask_nat, 'Fecha_Raw'], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
+
+            # Convertimos la columna Q a números (litros)
+            temp_mast['Litros Ingresados'] = pd.to_numeric(raw_recibo_mast['Litros_Raw'], errors='coerce').fillna(0)
+            
+            # Solo guardamos las filas que sí tienen una fecha real
             df_recibo_mast = temp_mast.dropna(subset=['Fecha']).copy()
             df_recibo_mast['Año'] = df_recibo_mast['Fecha'].dt.year
             df_recibo_mast['Mes'] = df_recibo_mast['Fecha'].dt.month
@@ -177,7 +181,7 @@ try:
     else:
         df_consolidado = pd.DataFrame(columns=['Fecha', 'Lote', 'Producto', 'Litros Procesados', 'Producto Terminado', 'Ratio de Conversión (%)'])
 
-    # --- CÁLCULO INTELIGENTE DE LITROS INGRESADOS SEGÚN GRUPO SELECCIONADO ---
+    # --- CÁLCULO INTELIGENTE DE LITROS INGRESADOS ---
     df_int_filt = df_recibo_int.copy()
     df_mast_filt = df_recibo_mast.copy()
 
@@ -218,7 +222,6 @@ try:
         else:
             anio_str = "2026"
 
-    # Título dinámico para el PDF según grupo seleccionado
     if filtro_grupo == "Mastellone":
         prefijo_titulo = "Reporte de produccion Mastellone"
     elif filtro_grupo == "Coopagro":
